@@ -1,7 +1,11 @@
 "use client"
 
+import { Suspense } from "react"
+import type { ElementType } from "react"
+
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+
 import {
   CheckCircle2,
   TicketCheck,
@@ -15,6 +19,14 @@ import {
 } from "@/components/ui/card"
 
 export default function BookingSuccessPage() {
+  return (
+    <Suspense fallback={<BookingSuccessLoading />}>
+      <BookingSuccessContent />
+    </Suspense>
+  )
+}
+
+function BookingSuccessContent() {
   const searchParams = useSearchParams()
 
   const bookingId =
@@ -31,8 +43,8 @@ export default function BookingSuccessPage() {
 
   if (!bookingId || !bookingReference) {
     return (
-      <div className="mx-auto w-full max-w-3xl">
-        <Card className="border-slate-200 bg-white shadow-sm">
+      <div className="mx-auto w-full max-w-4xl">
+        <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
           <CardContent className="flex min-h-80 flex-col items-center justify-center p-8 text-center">
             <TicketCheck className="size-10 text-slate-400" />
 
@@ -60,10 +72,10 @@ export default function BookingSuccessPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
-      <section className="rounded-2xl bg-[#241536] px-6 py-10 text-center text-white md:px-10">
-        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-white text-[#512978]">
-          <CheckCircle2 className="size-9" />
+    <div className="mx-auto w-full max-w-4xl space-y-6">
+      <section className="rounded-2xl bg-[#512978] px-6 py-10 text-center text-white shadow-sm sm:px-10">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-white/10">
+          <CheckCircle2 className="size-8" />
         </div>
 
         <h1 className="mt-5 text-3xl font-semibold tracking-tight">
@@ -141,7 +153,7 @@ function ConfirmationItem({
   label,
   value,
 }: {
-  icon: React.ElementType
+  icon: ElementType
   label: string
   value: string
 }) {
@@ -160,6 +172,16 @@ function ConfirmationItem({
           {value}
         </p>
       </div>
+    </div>
+  )
+}
+
+function BookingSuccessLoading() {
+  return (
+    <div className="mx-auto w-full max-w-4xl py-12 text-center">
+      <p className="text-sm text-slate-500">
+        Loading booking confirmation...
+      </p>
     </div>
   )
 }
