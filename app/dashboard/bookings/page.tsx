@@ -1007,104 +1007,111 @@ function QrTicketModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-purple-50 text-[#512978]">
-            <QrCode className="size-6" />
+      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        {/* Always-visible modal header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
+          <div>
+            <p className="text-sm font-semibold text-[#512978]">
+              CairoRoute
+            </p>
+            <p className="text-xs text-slate-500">
+              Boarding Ticket
+            </p>
           </div>
 
-          <p className="mt-3 text-sm font-semibold text-[#512978]">
-            CairoRoute
-          </p>
-
-          <h2 className="mt-1 text-2xl font-semibold text-slate-900">
-            Boarding Ticket
-          </h2>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Show this QR code when boarding the bus.
-          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close QR ticket"
+            title="Back to My Bookings"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <XCircle className="size-5" />
+          </button>
         </div>
 
-        <div className="mt-6 flex justify-center rounded-xl border border-slate-200 bg-white p-6">
-          <QRCodeSVG
-            value={
-              scanUrl
-            }
-            size={
-              220
-            }
-            level="H"
-            includeMargin
-          />
+        {/* Only the ticket content scrolls */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+          <div className="text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-purple-50 text-[#512978]">
+              <QrCode className="size-6" />
+            </div>
+
+            <h2 className="mt-3 text-2xl font-semibold text-slate-900">
+              Boarding Ticket
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Show this QR code when boarding the bus.
+            </p>
+          </div>
+
+          <div className="mt-6 flex justify-center rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+            <QRCodeSVG
+              value={scanUrl}
+              size={220}
+              level="H"
+              includeMargin
+            />
+          </div>
+
+          <div className="mt-5 space-y-3 rounded-xl bg-slate-50 p-4">
+            <TicketRow
+              label="Booking"
+              value={booking.bookingReference}
+            />
+
+            <TicketRow
+              label="Passenger"
+              value={booking.passengerName}
+            />
+
+            <TicketRow
+              label="Seat"
+              value={seatText}
+            />
+
+            <TicketRow
+              label="Pickup"
+              value={booking.pickupPoint}
+            />
+
+            <TicketRow
+              label="Destination"
+              value={booking.destination}
+            />
+
+            <TicketRow
+              label="Departure"
+              value={
+                booking.departureTime
+                  ? `${formatDate(
+                      booking.departureTime
+                    )} • ${formatTime(
+                      booking.departureTime
+                    )}`
+                  : "Unavailable"
+              }
+            />
+          </div>
+
+          <div className="mt-4 rounded-lg border border-purple-100 bg-purple-50 p-3">
+            <p className="text-center text-xs leading-5 text-slate-600">
+              Scan this ticket when boarding. Once verified, the booking will be marked as completed.
+            </p>
+          </div>
         </div>
 
-        <div className="mt-5 space-y-3 rounded-xl bg-slate-50 p-4">
-          <TicketRow
-            label="Booking"
-            value={
-              booking.bookingReference
-            }
-          />
-
-          <TicketRow
-            label="Passenger"
-            value={
-              booking.passengerName
-            }
-          />
-
-          <TicketRow
-            label="Seat"
-            value={
-              seatText
-            }
-          />
-
-          <TicketRow
-            label="Pickup"
-            value={
-              booking.pickupPoint
-            }
-          />
-
-          <TicketRow
-            label="Destination"
-            value={
-              booking.destination
-            }
-          />
-
-          <TicketRow
-            label="Departure"
-            value={
-              booking.departureTime
-                ? `${formatDate(
-                    booking.departureTime
-                  )} • ${formatTime(
-                    booking.departureTime
-                  )}`
-                : "Unavailable"
-            }
-          />
+        {/* Always-visible footer */}
+        <div className="shrink-0 border-t border-slate-100 bg-white p-4">
+          <Button
+            type="button"
+            onClick={onClose}
+            className="w-full bg-[#512978] text-white hover:bg-[#40205f]"
+          >
+            Back to My Bookings
+          </Button>
         </div>
-
-        <div className="mt-4 rounded-lg border border-purple-100 bg-purple-50 p-3">
-          <p className="text-center text-xs leading-5 text-slate-600">
-            Scan this ticket when boarding. Once verified, the booking will be marked as completed.
-          </p>
-        </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          onClick={
-            onClose
-          }
-          className="mt-5 w-full"
-        >
-          Close
-        </Button>
       </div>
     </div>
   )
