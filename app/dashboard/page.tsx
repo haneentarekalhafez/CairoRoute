@@ -1,17 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowRight,
   BusFront,
   CalendarDays,
+  Clock3,
   LocateFixed,
   MapPin,
   Navigation,
   Route,
+  TicketCheck,
 } from "lucide-react"
 
+import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -29,6 +32,8 @@ import {
   SelectTrigger,
 } from "@/components/ui/select"
 
+const PAGE_LOAD_TIME = Date.now()
+
 type Destination = {
   id: number
   name: string
@@ -37,14 +42,65 @@ type Destination = {
   is_active: boolean
 }
 
+type PickupPoint = {
+  id: number
+  name: string
+  area: string | null
+  latitude: number | null
+  longitude: number | null
+}
+
+type Booking = {
+  id: number
+  bookingReference: string
+  status: string
+  totalPrice: number
+  passengerName: string
+  passengerPhone: string
+  passengerEmail: string | null
+  createdAt: string
+  tripId: number | null
+  departureTime: string | null
+  arrivalTime: string | null
+  pickupPoint: string
+  pickupArea: string | null
+  destination: string
+  bus: string
+  plateNumber: string
+  seats: number[]
+}
+
+type BookingsResponse = {
+  bookings?: Booking[]
+  message?: string
+  error?: string
+}
+
+type Coordinates = {
+  latitude: number
+  longitude: number
+}
+
+type NearestPickup = {
+  pickup: PickupPoint
+  distanceKm: number
+}
+
 export default function DashboardPage() {
   const router = useRouter()
 
   const [currentLocation, setCurrentLocation] = useState("")
+  const [coordinates, setCoordinates] =
+    useState<Coordinates | null>(null)
+
   const [selectedDestinationId, setSelectedDestinationId] = useState("")
   const [destinations, setDestinations] = useState<Destination[]>([])
+  const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([])
+  const [bookings, setBookings] = useState<Booking[]>([])
 
   const [destinationsLoading, setDestinationsLoading] = useState(true)
+  const [dashboardLoading, setDashboardLoading] = useState(true)
+
   const [destinationsError, setDestinationsError] = useState("")
   const [message, setMessage] = useState("")
 
@@ -56,7 +112,10 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadDestinations() {
       try {
-        const response = await fetch("/api/destinations")
+        const response = await fetch("/api/destinations", {
+          cache: "no-store",
+        })
+
         const result = await response.json()
 
         if (!response.ok) {
@@ -80,9 +139,149 @@ export default function DashboardPage() {
     loadDestinations()
   }, [])
 
+  useEffect(() => {
+    async function loadPickupPoints() {
+      try {
+        const response = await fetch("/api/pickup-points", {
+          cache: "no-store",
+        })
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            result.message || "Failed to load pickup points."
+          )
+        }
+
+        setPickupPoints(result)
+      } catch (error) {
+        console.error("Failed to load pickup points:", error)
+      }
+    }
+
+    loadPickupPoints()
+  }, [])
+
+  useEffect(() => {
+    async function loadBookings() {
+      try {
+        const supabase = createClient()
+
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
+
+        if (sessionError || !session) {
+          return
+        }
+
+        const response = await fetch("/api/my-bookings", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          cache: "no-store",
+        })
+
+        const result =
+          (await response.json()) as BookingsResponse
+
+        if (!response.ok) {
+          throw new Error(
+            result.error
+              ? `${result.message} ${result.error}`
+              : result.message || "Failed to load bookings."
+          )
+        }
+
+        setBookings(result.bookings ?? [])
+      } catch (error) {
+        console.error(
+          "Failed to load dashboard bookings:",
+          error
+        )
+      } finally {
+        setDashboardLoading(false)
+      }
+    }
+
+    loadBookings()
+  }, [])
+
+  const nextBooking = useMemo(() => {
+    return (
+      bookings
+        .filter((booking) => {
+          if (booking.status.toLowerCase() !== "confirmed") {
+            return false
+          }
+
+          if (!booking.departureTime) {
+            return false
+          }
+
+          const departure = new Date(
+            booking.departureTime
+          ).getTime()
+
+          return departure > PAGE_LOAD_TIME
+        })
+        .sort((a, b) => {
+          const aTime = new Date(
+            a.departureTime!
+          ).getTime()
+
+          const bTime = new Date(
+            b.departureTime!
+          ).getTime()
+
+          return aTime - bTime
+        })[0] ?? null
+    )
+  }, [bookings])
+
+  const nearestPickup =
+    useMemo<NearestPickup | null>(() => {
+      if (!coordinates) {
+        return null
+      }
+
+      const validPickupPoints = pickupPoints.filter(
+        (pickup) =>
+          pickup.latitude !== null &&
+          pickup.longitude !== null
+      )
+
+      if (validPickupPoints.length === 0) {
+        return null
+      }
+
+      const calculated = validPickupPoints.map(
+        (pickup) => ({
+          pickup,
+          distanceKm: calculateDistanceKm(
+            coordinates.latitude,
+            coordinates.longitude,
+            pickup.latitude!,
+            pickup.longitude!
+          ),
+        })
+      )
+
+      calculated.sort(
+        (a, b) => a.distanceKm - b.distanceKm
+      )
+
+      return calculated[0] ?? null
+    }, [coordinates, pickupPoints])
+
   function detectLocation() {
     if (!navigator.geolocation) {
-      setMessage("Your browser does not support location detection.")
+      setMessage(
+        "Your browser does not support location detection."
+      )
       return
     }
 
@@ -90,11 +289,21 @@ export default function DashboardPage() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const latitude = position.coords.latitude.toFixed(6)
-        const longitude = position.coords.longitude.toFixed(6)
+        const latitude = position.coords.latitude
+        const longitude = position.coords.longitude
 
-        setCurrentLocation(`${latitude}, ${longitude}`)
-        setMessage("Your location was detected successfully.")
+        setCoordinates({
+          latitude,
+          longitude,
+        })
+
+        setCurrentLocation(
+          `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+        )
+
+        setMessage(
+          "Your location was detected successfully."
+        )
       },
       () => {
         setMessage(
@@ -102,6 +311,14 @@ export default function DashboardPage() {
         )
       }
     )
+  }
+
+  function handleLocationChange(value: string) {
+    setCurrentLocation(value)
+    setMessage("")
+
+    const parsed = parseCoordinates(value)
+    setCoordinates(parsed)
   }
 
   function searchRoutes() {
@@ -122,7 +339,9 @@ export default function DashboardPage() {
       destinationId: selectedDestination.id.toString(),
     })
 
-    router.push(`/dashboard/results?${params.toString()}`)
+    router.push(
+      `/dashboard/results?${params.toString()}`
+    )
   }
 
   function handleLocationKeyDown(
@@ -131,6 +350,10 @@ export default function DashboardPage() {
     if (event.key === "Enter") {
       searchRoutes()
     }
+  }
+
+  function openBookings() {
+    router.push("/dashboard/bookings")
   }
 
   return (
@@ -198,10 +421,11 @@ export default function DashboardPage() {
                 <Input
                   id="current-location"
                   value={currentLocation}
-                  onChange={(event) => {
-                    setCurrentLocation(event.target.value)
-                    setMessage("")
-                  }}
+                  onChange={(event) =>
+                    handleLocationChange(
+                      event.target.value
+                    )
+                  }
                   onKeyDown={handleLocationKeyDown}
                   placeholder="Enter your current location"
                   className="h-12 border-slate-300 bg-white pl-10 pr-12"
@@ -236,7 +460,8 @@ export default function DashboardPage() {
                   }
                 }}
                 disabled={
-                  destinationsLoading || Boolean(destinationsError)
+                  destinationsLoading ||
+                  Boolean(destinationsError)
                 }
               >
                 <SelectTrigger
@@ -324,17 +549,101 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent>
-            <div className="flex min-h-36 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-              <BusFront className="mb-3 size-8 text-slate-400" />
+            {dashboardLoading ? (
+              <div className="flex min-h-44 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 p-6">
+                <p className="text-sm text-slate-500">
+                  Loading your next trip...
+                </p>
+              </div>
+            ) : nextBooking ? (
+              <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-white text-[#512978] shadow-sm">
+                    <BusFront className="size-5" />
+                  </div>
 
-              <p className="font-medium text-slate-800">
-                No upcoming trips
-              </p>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">
+                      {nextBooking.pickupPoint} →{" "}
+                      {nextBooking.destination}
+                    </p>
 
-              <p className="mt-1 max-w-xs text-sm text-slate-500">
-                Your confirmed bus reservations will appear here.
-              </p>
-            </div>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {nextBooking.bus}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <DashboardDetail
+                    icon={CalendarDays}
+                    label="Date"
+                    value={
+                      nextBooking.departureTime
+                        ? formatDate(
+                            nextBooking.departureTime
+                          )
+                        : "Unavailable"
+                    }
+                  />
+
+                  <DashboardDetail
+                    icon={Clock3}
+                    label="Departure"
+                    value={
+                      nextBooking.departureTime
+                        ? formatTime(
+                            nextBooking.departureTime
+                          )
+                        : "Unavailable"
+                    }
+                  />
+
+                  <DashboardDetail
+                    icon={TicketCheck}
+                    label="Seat"
+                    value={
+                      nextBooking.seats.length > 0
+                        ? nextBooking.seats
+                            .map((seat) => `${seat}`)
+                            .join(", ")
+                        : "Unavailable"
+                    }
+                  />
+
+                  <DashboardDetail
+                    icon={BusFront}
+                    label="Plate"
+                    value={
+                      nextBooking.plateNumber ||
+                      "Unavailable"
+                    }
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={openBookings}
+                  className="mt-5 w-full border-purple-200 text-[#512978] hover:bg-purple-50"
+                >
+                  View my booking
+                  <ArrowRight className="size-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex min-h-44 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                <BusFront className="mb-3 size-8 text-slate-400" />
+
+                <p className="font-medium text-slate-800">
+                  No upcoming trips
+                </p>
+
+                <p className="mt-1 max-w-xs text-sm text-slate-500">
+                  Your confirmed bus reservations will appear here.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -358,20 +667,217 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent>
-            <div className="flex min-h-36 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-              <MapPin className="mb-3 size-8 text-slate-400" />
+            {nearestPickup ? (
+              <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-white text-[#512978] shadow-sm">
+                    <Navigation className="size-5" />
+                  </div>
 
-              <p className="font-medium text-slate-800">
-                Location not selected
-              </p>
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      {nearestPickup.pickup.name}
+                    </p>
 
-              <p className="mt-1 max-w-xs text-sm text-slate-500">
-                Detect your location to view nearby pickup suggestions.
-              </p>
-            </div>
+                    {nearestPickup.pickup.area && (
+                      <p className="mt-1 text-sm text-slate-500">
+                        {nearestPickup.pickup.area}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-lg bg-white p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Approximate distance
+                  </p>
+
+                  <p className="mt-1 text-2xl font-semibold text-[#512978]">
+                    {formatDistance(
+                      nearestPickup.distanceKm
+                    )}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Straight-line distance from your detected location.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-44 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                <MapPin className="mb-3 size-8 text-slate-400" />
+
+                <p className="font-medium text-slate-800">
+                  Location not selected
+                </p>
+
+                <p className="mt-1 max-w-xs text-sm text-slate-500">
+                  Detect your location to view the nearest pickup point.
+                </p>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={detectLocation}
+                  className="mt-4 border-purple-200 text-[#512978] hover:bg-purple-50"
+                >
+                  <LocateFixed className="size-4" />
+                  Detect location
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </section>
     </div>
   )
+}
+
+function DashboardDetail({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg bg-white p-3">
+      <Icon className="mt-0.5 size-4 shrink-0 text-[#512978]" />
+
+      <div>
+        <p className="text-xs text-slate-500">
+          {label}
+        </p>
+
+        <p className="mt-1 text-sm font-medium text-slate-900">
+          {value}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function parseCoordinates(
+  value: string
+): Coordinates | null {
+  const parts = value
+    .split(",")
+    .map((part) => part.trim())
+
+  if (parts.length !== 2) {
+    return null
+  }
+
+  const latitude = Number(parts[0])
+  const longitude = Number(parts[1])
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return null
+  }
+
+  if (
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null
+  }
+
+  return {
+    latitude,
+    longitude,
+  }
+}
+
+function calculateDistanceKm(
+  latitude1: number,
+  longitude1: number,
+  latitude2: number,
+  longitude2: number
+) {
+  const earthRadiusKm = 6371
+
+  const latitudeDifference =
+    degreesToRadians(
+      latitude2 - latitude1
+    )
+
+  const longitudeDifference =
+    degreesToRadians(
+      longitude2 - longitude1
+    )
+
+  const firstLatitude =
+    degreesToRadians(latitude1)
+
+  const secondLatitude =
+    degreesToRadians(latitude2)
+
+  const a =
+    Math.sin(
+      latitudeDifference / 2
+    ) ** 2 +
+    Math.cos(firstLatitude) *
+      Math.cos(secondLatitude) *
+      Math.sin(
+        longitudeDifference / 2
+      ) ** 2
+
+  const c =
+    2 *
+    Math.atan2(
+      Math.sqrt(a),
+      Math.sqrt(1 - a)
+    )
+
+  return earthRadiusKm * c
+}
+
+function degreesToRadians(
+  degrees: number
+) {
+  return degrees * (Math.PI / 180)
+}
+
+function formatDistance(
+  distanceKm: number
+) {
+  if (distanceKm < 1) {
+    return `${Math.round(
+      distanceKm * 1000
+    )} m`
+  }
+
+  return `${distanceKm.toFixed(1)} km`
+}
+
+function formatDate(
+  value: string
+) {
+  return new Intl.DateTimeFormat(
+    "en-EG",
+    {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }
+  ).format(new Date(value))
+}
+
+function formatTime(
+  value: string
+) {
+  return new Intl.DateTimeFormat(
+    "en-EG",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+    }
+  ).format(new Date(value))
 }
