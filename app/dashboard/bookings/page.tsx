@@ -23,6 +23,11 @@ import { QRCodeSVG } from "qrcode.react"
 
 import { createClient } from "@/lib/supabase/client"
 
+import {
+  useAppPreferences,
+  type LanguagePreference,
+} from "@/components/app-preferences-provider"
+
 import { Button } from "@/components/ui/button"
 
 import {
@@ -47,13 +52,23 @@ type Booking = {
   totalPrice: number
   passengerName: string
   passengerPhone: string
-  passengerEmail: string | null
+  passengerEmail:
+    | string
+    | null
   createdAt: string
-  tripId: number | null
-  departureTime: string | null
-  arrivalTime: string | null
+  tripId:
+    | number
+    | null
+  departureTime:
+    | string
+    | null
+  arrivalTime:
+    | string
+    | null
   pickupPoint: string
-  pickupArea: string | null
+  pickupArea:
+    | string
+    | null
   destination: string
   bus: string
   plateNumber: string
@@ -69,7 +84,6 @@ type BookingsResponse = {
 type CancelResponse = {
   message?: string
   error?: string
-
   alreadyCancelled?: boolean
 
   booking?: {
@@ -82,7 +96,890 @@ type CancelResponse = {
   }
 }
 
+const bookingsCopy = {
+  english: {
+    loginMissing:
+      "Your login session could not be found. Please log in again.",
+
+    loadFailed:
+      "Failed to load your bookings.",
+
+    cancelQuestion:
+      "Are you sure you want to cancel booking",
+
+    cancelFailed:
+      "Failed to cancel booking.",
+
+    alreadyCancelled:
+      "This booking was already cancelled.",
+
+    cancelledSuccessfully:
+      "Booking cancelled successfully.",
+
+    trips:
+      "Trips",
+
+    myBookings:
+      "My Bookings",
+
+    pageDescription:
+      "View your upcoming reservations and previous trips.",
+
+    upcoming:
+      "Upcoming",
+
+    upcomingDescription:
+      "Upcoming reservations",
+
+    completed:
+      "Completed",
+
+    completedDescription:
+      "Previous completed trips",
+
+    cancelled:
+      "Cancelled",
+
+    cancelledDescription:
+      "Cancelled reservations",
+
+    bookingHistory:
+      "Booking history",
+
+    historyDescription:
+      "Review your current and previous trip reservations.",
+
+    previous:
+      "Previous",
+
+    loading:
+      "Loading your bookings...",
+
+    booking:
+      "Booking",
+
+    confirmed:
+      "Confirmed",
+
+    unknown:
+      "Unknown",
+
+    dateUnavailable:
+      "Date unavailable",
+
+    showQr:
+      "Show QR",
+
+    cancelling:
+      "Cancelling...",
+
+    cancelBooking:
+      "Cancel booking",
+
+    pickupPoint:
+      "Pickup point",
+
+    destination:
+      "Destination",
+
+    date:
+      "Date",
+
+    departure:
+      "Departure",
+
+    seat:
+      "Seat",
+
+    notAvailable:
+      "Not available",
+
+    unavailable:
+      "Unavailable",
+
+    vehicleDetails:
+      "Vehicle details",
+
+    plateNumber:
+      "Plate number",
+
+    boardingTicket:
+      "Boarding Ticket",
+
+    showQrDescription:
+      "Show this QR code when boarding the bus.",
+
+    bookingLabel:
+      "Booking",
+
+    passenger:
+      "Passenger",
+
+    pickup:
+      "Pickup",
+
+    scanDescription:
+      "Scan this ticket when boarding. Once verified, the booking will be marked as completed.",
+
+    backBookings:
+      "Back to My Bookings",
+
+    closeQr:
+      "Close QR ticket",
+
+    noUpcoming:
+      "No upcoming bookings",
+
+    noPrevious:
+      "No previous bookings",
+
+    noUpcomingDescription:
+      "When you reserve a trip, your confirmed booking will appear here.",
+
+    noPreviousDescription:
+      "Your completed and cancelled trips will appear here.",
+  },
+
+  arabic: {
+    loginMissing:
+      "تعذر العثور على جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.",
+
+    loadFailed:
+      "تعذر تحميل حجوزاتك.",
+
+    cancelQuestion:
+      "هل أنت متأكد أنك تريد إلغاء الحجز",
+
+    cancelFailed:
+      "تعذر إلغاء الحجز.",
+
+    alreadyCancelled:
+      "تم إلغاء هذا الحجز بالفعل.",
+
+    cancelledSuccessfully:
+      "تم إلغاء الحجز بنجاح.",
+
+    trips:
+      "الرحلات",
+
+    myBookings:
+      "حجوزاتي",
+
+    pageDescription:
+      "عرض الحجوزات القادمة والرحلات السابقة.",
+
+    upcoming:
+      "القادمة",
+
+    upcomingDescription:
+      "الحجوزات القادمة",
+
+    completed:
+      "المكتملة",
+
+    completedDescription:
+      "الرحلات المكتملة السابقة",
+
+    cancelled:
+      "الملغاة",
+
+    cancelledDescription:
+      "الحجوزات الملغاة",
+
+    bookingHistory:
+      "سجل الحجوزات",
+
+    historyDescription:
+      "راجع حجوزات الرحلات الحالية والسابقة.",
+
+    previous:
+      "السابقة",
+
+    loading:
+      "جارٍ تحميل حجوزاتك...",
+
+    booking:
+      "الحجز",
+
+    confirmed:
+      "مؤكد",
+
+    unknown:
+      "غير معروف",
+
+    dateUnavailable:
+      "التاريخ غير متاح",
+
+    showQr:
+      "عرض QR",
+
+    cancelling:
+      "جارٍ الإلغاء...",
+
+    cancelBooking:
+      "إلغاء الحجز",
+
+    pickupPoint:
+      "نقطة الركوب",
+
+    destination:
+      "الوجهة",
+
+    date:
+      "التاريخ",
+
+    departure:
+      "المغادرة",
+
+    seat:
+      "المقعد",
+
+    notAvailable:
+      "غير متاح",
+
+    unavailable:
+      "غير متاح",
+
+    vehicleDetails:
+      "تفاصيل المركبة",
+
+    plateNumber:
+      "رقم اللوحة",
+
+    boardingTicket:
+      "تذكرة الصعود",
+
+    showQrDescription:
+      "اعرض رمز QR هذا عند الصعود إلى الحافلة.",
+
+    bookingLabel:
+      "الحجز",
+
+    passenger:
+      "الراكب",
+
+    pickup:
+      "نقطة الركوب",
+
+    scanDescription:
+      "امسح هذه التذكرة عند الصعود. بعد التحقق، سيتم تسجيل الحجز كمكتمل.",
+
+    backBookings:
+      "العودة إلى حجوزاتي",
+
+    closeQr:
+      "إغلاق تذكرة QR",
+
+    noUpcoming:
+      "لا توجد حجوزات قادمة",
+
+    noPrevious:
+      "لا توجد حجوزات سابقة",
+
+    noUpcomingDescription:
+      "عندما تحجز رحلة، سيظهر الحجز المؤكد هنا.",
+
+    noPreviousDescription:
+      "ستظهر الرحلات المكتملة والملغاة هنا.",
+  },
+
+  french: {
+    loginMissing:
+      "Votre session de connexion est introuvable. Veuillez vous reconnecter.",
+
+    loadFailed:
+      "Impossible de charger vos réservations.",
+
+    cancelQuestion:
+      "Êtes-vous sûr de vouloir annuler la réservation",
+
+    cancelFailed:
+      "Impossible d’annuler la réservation.",
+
+    alreadyCancelled:
+      "Cette réservation a déjà été annulée.",
+
+    cancelledSuccessfully:
+      "Réservation annulée avec succès.",
+
+    trips:
+      "Trajets",
+
+    myBookings:
+      "Mes réservations",
+
+    pageDescription:
+      "Consultez vos réservations à venir et vos trajets précédents.",
+
+    upcoming:
+      "À venir",
+
+    upcomingDescription:
+      "Réservations à venir",
+
+    completed:
+      "Terminées",
+
+    completedDescription:
+      "Trajets précédents terminés",
+
+    cancelled:
+      "Annulées",
+
+    cancelledDescription:
+      "Réservations annulées",
+
+    bookingHistory:
+      "Historique des réservations",
+
+    historyDescription:
+      "Consultez vos réservations de trajets actuelles et précédentes.",
+
+    previous:
+      "Précédentes",
+
+    loading:
+      "Chargement de vos réservations...",
+
+    booking:
+      "Réservation",
+
+    confirmed:
+      "Confirmée",
+
+    unknown:
+      "Inconnu",
+
+    dateUnavailable:
+      "Date indisponible",
+
+    showQr:
+      "Afficher le QR",
+
+    cancelling:
+      "Annulation...",
+
+    cancelBooking:
+      "Annuler la réservation",
+
+    pickupPoint:
+      "Point de prise en charge",
+
+    destination:
+      "Destination",
+
+    date:
+      "Date",
+
+    departure:
+      "Départ",
+
+    seat:
+      "Place",
+
+    notAvailable:
+      "Indisponible",
+
+    unavailable:
+      "Indisponible",
+
+    vehicleDetails:
+      "Détails du véhicule",
+
+    plateNumber:
+      "Immatriculation",
+
+    boardingTicket:
+      "Titre de transport",
+
+    showQrDescription:
+      "Présentez ce code QR lors de la montée dans le bus.",
+
+    bookingLabel:
+      "Réservation",
+
+    passenger:
+      "Passager",
+
+    pickup:
+      "Prise en charge",
+
+    scanDescription:
+      "Scannez ce billet lors de la montée. Une fois vérifiée, la réservation sera marquée comme terminée.",
+
+    backBookings:
+      "Retour à mes réservations",
+
+    closeQr:
+      "Fermer le billet QR",
+
+    noUpcoming:
+      "Aucune réservation à venir",
+
+    noPrevious:
+      "Aucune réservation précédente",
+
+    noUpcomingDescription:
+      "Lorsque vous réservez un trajet, votre réservation confirmée apparaîtra ici.",
+
+    noPreviousDescription:
+      "Vos trajets terminés et annulés apparaîtront ici.",
+  },
+} as const
+
+const locationTranslations: Record<
+  string,
+  {
+    arabic: string
+    french: string
+  }
+> = {
+  "new cairo": {
+    arabic:
+      "القاهرة الجديدة",
+    french:
+      "Nouveau Caire",
+  },
+
+  "fifth settlement": {
+    arabic:
+      "التجمع الخامس",
+    french:
+      "Cinquième arrondissement",
+  },
+
+  "5th settlement": {
+    arabic:
+      "التجمع الخامس",
+    french:
+      "Cinquième arrondissement",
+  },
+
+  "first settlement": {
+    arabic:
+      "التجمع الأول",
+    french:
+      "Premier arrondissement",
+  },
+
+  "third settlement": {
+    arabic:
+      "التجمع الثالث",
+    french:
+      "Troisième arrondissement",
+  },
+
+  rehab: {
+    arabic:
+      "الرحاب",
+    french:
+      "Al Rehab",
+  },
+
+  "el rehab": {
+    arabic:
+      "الرحاب",
+    french:
+      "Al Rehab",
+  },
+
+  madinaty: {
+    arabic:
+      "مدينتي",
+    french:
+      "Madinaty",
+  },
+
+  shorouk: {
+    arabic:
+      "الشروق",
+    french:
+      "El Shorouk",
+  },
+
+  "el shorouk": {
+    arabic:
+      "الشروق",
+    french:
+      "El Shorouk",
+  },
+
+  maadi: {
+    arabic:
+      "المعادي",
+    french:
+      "Maadi",
+  },
+
+  "el maadi": {
+    arabic:
+      "المعادي",
+    french:
+      "Maadi",
+  },
+
+  "nasr city": {
+    arabic:
+      "مدينة نصر",
+    french:
+      "Nasr City",
+  },
+
+  "madinet nasr": {
+    arabic:
+      "مدينة نصر",
+    french:
+      "Nasr City",
+  },
+
+  heliopolis: {
+    arabic:
+      "مصر الجديدة",
+    french:
+      "Héliopolis",
+  },
+
+  "masr el gedida": {
+    arabic:
+      "مصر الجديدة",
+    french:
+      "Héliopolis",
+  },
+
+  "misr el gedida": {
+    arabic:
+      "مصر الجديدة",
+    french:
+      "Héliopolis",
+  },
+
+  "6th of october": {
+    arabic:
+      "6 أكتوبر",
+    french:
+      "6 Octobre",
+  },
+
+  "6 october": {
+    arabic:
+      "6 أكتوبر",
+    french:
+      "6 Octobre",
+  },
+
+  october: {
+    arabic:
+      "أكتوبر",
+    french:
+      "Octobre",
+  },
+
+  "sheikh zayed": {
+    arabic:
+      "الشيخ زايد",
+    french:
+      "Cheikh Zayed",
+  },
+
+  downtown: {
+    arabic:
+      "وسط البلد",
+    french:
+      "Centre-ville",
+  },
+
+  "downtown cairo": {
+    arabic:
+      "وسط القاهرة",
+    french:
+      "Centre-ville du Caire",
+  },
+
+  "new capital": {
+    arabic:
+      "العاصمة الإدارية الجديدة",
+    french:
+      "Nouvelle capitale administrative",
+  },
+
+  "new administrative capital": {
+    arabic:
+      "العاصمة الإدارية الجديدة",
+    french:
+      "Nouvelle capitale administrative",
+  },
+
+  "abbas el akkad": {
+    arabic:
+      "عباس العقاد",
+    french:
+      "Abbas El Akkad",
+  },
+
+  "makram ebeid": {
+    arabic:
+      "مكرم عبيد",
+    french:
+      "Makram Ebeid",
+  },
+
+  "90th street": {
+    arabic:
+      "شارع التسعين",
+    french:
+      "Rue 90",
+  },
+
+  "north 90th street": {
+    arabic:
+      "شارع التسعين الشمالي",
+    french:
+      "Rue 90 Nord",
+  },
+
+  "south 90th street": {
+    arabic:
+      "شارع التسعين الجنوبي",
+    french:
+      "Rue 90 Sud",
+  },
+
+  "cairo festival city": {
+    arabic:
+      "كايرو فيستيفال سيتي",
+    french:
+      "Cairo Festival City",
+  },
+
+  "point 90": {
+    arabic:
+      "بوينت 90",
+    french:
+      "Point 90",
+  },
+
+  auc: {
+    arabic:
+      "الجامعة الأمريكية بالقاهرة",
+    french:
+      "Université américaine du Caire",
+  },
+
+  "american university in cairo": {
+    arabic:
+      "الجامعة الأمريكية بالقاهرة",
+    french:
+      "Université américaine du Caire",
+  },
+
+  ramses: {
+    arabic:
+      "رمسيس",
+    french:
+      "Ramsès",
+  },
+
+  tahrir: {
+    arabic:
+      "التحرير",
+    french:
+      "Tahrir",
+  },
+
+  zamalek: {
+    arabic:
+      "الزمالك",
+    french:
+      "Zamalek",
+  },
+
+  dokki: {
+    arabic:
+      "الدقي",
+    french:
+      "Dokki",
+  },
+
+  mohandessin: {
+    arabic:
+      "المهندسين",
+    french:
+      "Mohandessin",
+  },
+
+  giza: {
+    arabic:
+      "الجيزة",
+    french:
+      "Gizeh",
+  },
+
+  katameya: {
+    arabic:
+      "القطامية",
+    french:
+      "Katameya",
+  },
+
+  mokattam: {
+    arabic:
+      "المقطم",
+    french:
+      "Mokattam",
+  },
+
+  "ain shams": {
+    arabic:
+      "عين شمس",
+    french:
+      "Aïn Shams",
+  },
+
+  nozha: {
+    arabic:
+      "النزهة",
+    french:
+      "Nozha",
+  },
+
+  "new nozha": {
+    arabic:
+      "النزهة الجديدة",
+    french:
+      "Nouvelle Nozha",
+  },
+
+  obour: {
+    arabic:
+      "العبور",
+    french:
+      "Obour",
+  },
+
+  "el obour": {
+    arabic:
+      "العبور",
+    french:
+      "Obour",
+  },
+
+  "badr city": {
+    arabic:
+      "مدينة بدر",
+    french:
+      "Ville de Badr",
+  },
+
+  "future city": {
+    arabic:
+      "مستقبل سيتي",
+    french:
+      "Mostakbal City",
+  },
+
+  "mostakbal city": {
+    arabic:
+      "مستقبل سيتي",
+    french:
+      "Mostakbal City",
+  },
+}
+
+function translateLocationText(
+  value:
+    | string
+    | null
+    | undefined,
+  language:
+    LanguagePreference
+) {
+  if (!value) {
+    return ""
+  }
+
+  if (
+    language ===
+    "english"
+  ) {
+    return value
+  }
+
+  const normalized =
+    value
+      .trim()
+      .toLowerCase()
+
+  const direct =
+    locationTranslations[
+      normalized
+    ]
+
+  if (
+    direct
+  ) {
+    return direct[
+      language
+    ]
+  }
+
+  let translated =
+    value
+
+  const entries =
+    Object.entries(
+      locationTranslations
+    ).sort(
+      (
+        [a],
+        [b]
+      ) =>
+        b.length -
+        a.length
+    )
+
+  for (
+    const [
+      english,
+      translation,
+    ] of entries
+  ) {
+    translated =
+      translated.replace(
+        new RegExp(
+          escapeRegExp(
+            english
+          ),
+          "gi"
+        ),
+        translation[
+          language
+        ]
+      )
+  }
+
+  return translated
+}
+
+function escapeRegExp(
+  value: string
+) {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  )
+}
+
 export default function BookingsPage() {
+  const {
+    language,
+  } =
+    useAppPreferences()
+
+  const copy =
+    bookingsCopy[
+      language
+    ]
+
   const [
     activeTab,
     setActiveTab,
@@ -95,7 +992,9 @@ export default function BookingsPage() {
     bookings,
     setBookings,
   ] =
-    useState<Booking[]>([])
+    useState<Booking[]>(
+      []
+    )
 
   const [
     loading,
@@ -146,9 +1045,17 @@ export default function BookingsPage() {
   useEffect(() => {
     async function loadBookings() {
       try {
-        setLoading(true)
-        setMessage("")
-        setIsError(false)
+        setLoading(
+          true
+        )
+
+        setMessage(
+          ""
+        )
+
+        setIsError(
+          false
+        )
 
         const supabase =
           createClient()
@@ -167,7 +1074,7 @@ export default function BookingsPage() {
           !session
         ) {
           throw new Error(
-            "Your login session could not be found. Please log in again."
+            copy.loginMissing
           )
         }
 
@@ -175,7 +1082,8 @@ export default function BookingsPage() {
           await fetch(
             "/api/my-bookings",
             {
-              method: "GET",
+              method:
+                "GET",
 
               headers: {
                 Authorization:
@@ -190,12 +1098,14 @@ export default function BookingsPage() {
         const result =
           (await response.json()) as BookingsResponse
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
             result.error
               ? `${result.message} ${result.error}`
               : result.message ||
-                  "Failed to load your bookings."
+                  copy.loadFailed
           )
         }
 
@@ -203,21 +1113,30 @@ export default function BookingsPage() {
           result.bookings ??
             []
         )
-      } catch (error) {
-        setIsError(true)
+      } catch (
+        error
+      ) {
+        setIsError(
+          true
+        )
 
         setMessage(
           error instanceof Error
             ? error.message
-            : "Failed to load your bookings."
+            : copy.loadFailed
         )
       } finally {
-        setLoading(false)
+        setLoading(
+          false
+        )
       }
     }
 
     loadBookings()
-  }, [])
+  }, [
+    copy.loadFailed,
+    copy.loginMissing,
+  ])
 
   /*
    * =========================================
@@ -226,58 +1145,68 @@ export default function BookingsPage() {
    */
 
   const upcomingBookings =
-    useMemo(() => {
-      return bookings
-        .filter(
-          (booking) => {
-            const status =
-              booking.status.toLowerCase()
+    useMemo(
+      () => {
+        return bookings
+          .filter(
+            (
+              booking
+            ) => {
+              const status =
+                booking.status.toLowerCase()
 
-            if (
-              status ===
-                "completed" ||
-              status ===
-                "cancelled"
-            ) {
-              return false
+              if (
+                status ===
+                  "completed" ||
+                status ===
+                  "cancelled"
+              ) {
+                return false
+              }
+
+              if (
+                !booking.departureTime
+              ) {
+                return false
+              }
+
+              const departure =
+                new Date(
+                  booking.departureTime
+                ).getTime()
+
+              return (
+                departure >
+                PAGE_LOAD_TIME
+              )
             }
+          )
+          .sort(
+            (
+              a,
+              b
+            ) => {
+              const aTime =
+                new Date(
+                  a.departureTime!
+                ).getTime()
 
-            if (
-              !booking.departureTime
-            ) {
-              return false
+              const bTime =
+                new Date(
+                  b.departureTime!
+                ).getTime()
+
+              return (
+                aTime -
+                bTime
+              )
             }
-
-            const departure =
-              new Date(
-                booking.departureTime
-              ).getTime()
-
-            return (
-              departure >
-              PAGE_LOAD_TIME
-            )
-          }
-        )
-        .sort(
-          (a, b) => {
-            const aTime =
-              new Date(
-                a.departureTime!
-              ).getTime()
-
-            const bTime =
-              new Date(
-                b.departureTime!
-              ).getTime()
-
-            return (
-              aTime -
-              bTime
-            )
-          }
-        )
-    }, [bookings])
+          )
+      },
+      [
+        bookings,
+      ]
+    )
 
   /*
    * =========================================
@@ -286,79 +1215,87 @@ export default function BookingsPage() {
    */
 
   const previousBookings =
-    useMemo(() => {
-      return bookings
-        .filter(
-          (booking) => {
-            const status =
-              booking.status.toLowerCase()
+    useMemo(
+      () => {
+        return bookings
+          .filter(
+            (
+              booking
+            ) => {
+              const status =
+                booking.status.toLowerCase()
 
-            if (
-              status ===
-                "completed" ||
-              status ===
-                "cancelled"
-            ) {
-              return true
+              if (
+                status ===
+                  "completed" ||
+                status ===
+                  "cancelled"
+              ) {
+                return true
+              }
+
+              if (
+                !booking.departureTime
+              ) {
+                return true
+              }
+
+              const departure =
+                new Date(
+                  booking.departureTime
+                ).getTime()
+
+              return (
+                departure <=
+                PAGE_LOAD_TIME
+              )
             }
+          )
+          .sort(
+            (
+              a,
+              b
+            ) => {
+              const aTime =
+                a.departureTime
+                  ? new Date(
+                      a.departureTime
+                    ).getTime()
+                  : 0
 
-            if (
-              !booking.departureTime
-            ) {
-              return true
+              const bTime =
+                b.departureTime
+                  ? new Date(
+                      b.departureTime
+                    ).getTime()
+                  : 0
+
+              return (
+                bTime -
+                aTime
+              )
             }
-
-            const departure =
-              new Date(
-                booking.departureTime
-              ).getTime()
-
-            return (
-              departure <=
-              PAGE_LOAD_TIME
-            )
-          }
-        )
-        .sort(
-          (a, b) => {
-            const aTime =
-              a.departureTime
-                ? new Date(
-                    a.departureTime
-                  ).getTime()
-                : 0
-
-            const bTime =
-              b.departureTime
-                ? new Date(
-                    b.departureTime
-                  ).getTime()
-                : 0
-
-            return (
-              bTime -
-              aTime
-            )
-          }
-        )
-    }, [bookings])
-
-  /*
-   * =========================================
-   * SUMMARY COUNTS
-   * =========================================
-   */
+          )
+      },
+      [
+        bookings,
+      ]
+    )
 
   const completedCount =
     bookings.filter(
-      (booking) =>
+      (
+        booking
+      ) =>
         booking.status.toLowerCase() ===
         "completed"
     ).length
 
   const cancelledCount =
     bookings.filter(
-      (booking) =>
+      (
+        booking
+      ) =>
         booking.status.toLowerCase() ===
         "cancelled"
     ).length
@@ -391,8 +1328,13 @@ export default function BookingsPage() {
       booking
     )
 
-    setMessage("")
-    setIsError(false)
+    setMessage(
+      ""
+    )
+
+    setIsError(
+      false
+    )
   }
 
   /*
@@ -406,10 +1348,12 @@ export default function BookingsPage() {
   ) {
     const confirmed =
       window.confirm(
-        `Are you sure you want to cancel booking ${booking.bookingReference}?`
+        `${copy.cancelQuestion} ${booking.bookingReference}?`
       )
 
-    if (!confirmed) {
+    if (
+      !confirmed
+    ) {
       return
     }
 
@@ -418,8 +1362,13 @@ export default function BookingsPage() {
         booking.bookingReference
       )
 
-      setMessage("")
-      setIsError(false)
+      setMessage(
+        ""
+      )
+
+      setIsError(
+        false
+      )
 
       const supabase =
         createClient()
@@ -438,7 +1387,7 @@ export default function BookingsPage() {
         !session
       ) {
         throw new Error(
-          "Your login session could not be found. Please log in again."
+          copy.loginMissing
         )
       }
 
@@ -446,7 +1395,8 @@ export default function BookingsPage() {
         await fetch(
           "/api/bookings/cancel",
           {
-            method: "POST",
+            method:
+              "POST",
 
             headers: {
               "Content-Type":
@@ -457,30 +1407,28 @@ export default function BookingsPage() {
             },
 
             body:
-              JSON.stringify({
-                bookingReference:
-                  booking.bookingReference,
-              }),
+              JSON.stringify(
+                {
+                  bookingReference:
+                    booking.bookingReference,
+                }
+              ),
           }
         )
 
       const result =
         (await response.json()) as CancelResponse
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           result.error
             ? `${result.message} ${result.error}`
             : result.message ||
-                "Failed to cancel booking."
+                copy.cancelFailed
         )
       }
-
-      /*
-       * Update our existing booking in state.
-       *
-       * No need to reload the whole page.
-       */
 
       setBookings(
         (
@@ -494,7 +1442,6 @@ export default function BookingsPage() {
               booking.bookingReference
                 ? {
                     ...currentBooking,
-
                     status:
                       "cancelled",
                   }
@@ -504,18 +1451,24 @@ export default function BookingsPage() {
 
       setMessage(
         result.alreadyCancelled
-          ? "This booking was already cancelled."
-          : "Booking cancelled successfully."
+          ? copy.alreadyCancelled
+          : copy.cancelledSuccessfully
       )
 
-      setIsError(false)
-    } catch (error) {
-      setIsError(true)
+      setIsError(
+        false
+      )
+    } catch (
+      error
+    ) {
+      setIsError(
+        true
+      )
 
       setMessage(
         error instanceof Error
           ? error.message
-          : "Failed to cancel booking."
+          : copy.cancelFailed
       )
     } finally {
       setCancellingReference(
@@ -524,25 +1477,25 @@ export default function BookingsPage() {
     }
   }
 
-  /*
-   * =========================================
-   * PAGE
-   * =========================================
-   */
-
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
       <section>
         <p className="text-sm font-medium text-[#512978]">
-          Trips
+          {
+            copy.trips
+          }
         </p>
 
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
-          My Bookings
+          {
+            copy.myBookings
+          }
         </h1>
 
         <p className="mt-2 text-slate-600">
-          View your upcoming reservations and previous trips.
+          {
+            copy.pageDescription
+          }
         </p>
       </section>
 
@@ -553,33 +1506,54 @@ export default function BookingsPage() {
           icon={
             TicketCheck
           }
-          label="Upcoming"
-          value={
-            upcomingBookings.length.toString()
+          label={
+            copy.upcoming
           }
-          description="Upcoming reservations"
+          value={
+            formatNumber(
+              upcomingBookings.length,
+              language
+            )
+          }
+          description={
+            copy.upcomingDescription
+          }
         />
 
         <SummaryCard
           icon={
             CheckCircle2
           }
-          label="Completed"
-          value={
-            completedCount.toString()
+          label={
+            copy.completed
           }
-          description="Previous completed trips"
+          value={
+            formatNumber(
+              completedCount,
+              language
+            )
+          }
+          description={
+            copy.completedDescription
+          }
         />
 
         <SummaryCard
           icon={
             XCircle
           }
-          label="Cancelled"
-          value={
-            cancelledCount.toString()
+          label={
+            copy.cancelled
           }
-          description="Cancelled reservations"
+          value={
+            formatNumber(
+              cancelledCount,
+              language
+            )
+          }
+          description={
+            copy.cancelledDescription
+          }
         />
       </section>
 
@@ -590,15 +1564,17 @@ export default function BookingsPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-xl text-slate-900">
-                Booking history
+                {
+                  copy.bookingHistory
+                }
               </CardTitle>
 
               <CardDescription className="mt-1">
-                Review your current and previous trip reservations.
+                {
+                  copy.historyDescription
+                }
               </CardDescription>
             </div>
-
-            {/* TABS */}
 
             <div className="flex w-full rounded-lg bg-slate-100 p-1 sm:w-auto">
               <button
@@ -608,8 +1584,13 @@ export default function BookingsPage() {
                     "upcoming"
                   )
 
-                  setMessage("")
-                  setIsError(false)
+                  setMessage(
+                    ""
+                  )
+
+                  setIsError(
+                    false
+                  )
                 }}
                 className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition sm:flex-none ${
                   activeTab ===
@@ -618,7 +1599,9 @@ export default function BookingsPage() {
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Upcoming
+                {
+                  copy.upcoming
+                }
               </button>
 
               <button
@@ -628,8 +1611,13 @@ export default function BookingsPage() {
                     "previous"
                   )
 
-                  setMessage("")
-                  setIsError(false)
+                  setMessage(
+                    ""
+                  )
+
+                  setIsError(
+                    false
+                  )
                 }}
                 className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition sm:flex-none ${
                   activeTab ===
@@ -638,7 +1626,9 @@ export default function BookingsPage() {
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Previous
+                {
+                  copy.previous
+                }
               </button>
             </div>
           </div>
@@ -648,13 +1638,17 @@ export default function BookingsPage() {
           {loading ? (
             <div className="flex min-h-72 items-center justify-center">
               <p className="text-sm text-slate-500">
-                Loading your bookings...
+                {
+                  copy.loading
+                }
               </p>
             </div>
           ) : displayedBookings.length >
             0 ? (
             displayedBookings.map(
-              (booking) => (
+              (
+                booking
+              ) => (
                 <BookingCard
                   key={
                     booking.id
@@ -682,6 +1676,9 @@ export default function BookingsPage() {
                       booking
                     )
                   }
+                  language={
+                    language
+                  }
                 />
               )
             )
@@ -689,6 +1686,9 @@ export default function BookingsPage() {
             <EmptyBookingsState
               activeTab={
                 activeTab
+              }
+              language={
+                language
               }
             />
           )}
@@ -725,6 +1725,9 @@ export default function BookingsPage() {
           baseUrl={
             qrBaseUrl
           }
+          language={
+            language
+          }
           onClose={() => {
             setQrBooking(
               null
@@ -740,36 +1743,47 @@ export default function BookingsPage() {
   )
 }
 
-/*
- * =========================================
- * BOOKING CARD
- * =========================================
- */
-
 function BookingCard({
   booking,
   showCancelButton,
   cancelling,
   onShowQr,
   onCancel,
+  language,
 }: {
   booking: Booking
   showCancelButton: boolean
   cancelling: boolean
   onShowQr: () => void
   onCancel: () => void
+  language:
+    LanguagePreference
 }) {
+  const copy =
+    bookingsCopy[
+      language
+    ]
+
+  const statusKey =
+    booking.status
+      .trim()
+      .toLowerCase()
+
   const status =
     formatStatus(
-      booking.status
+      booking.status,
+      language
     )
 
   const statusStyles =
-    status === "Confirmed"
+    statusKey ===
+    "confirmed"
       ? "bg-emerald-50 text-emerald-700"
-      : status === "Completed"
+      : statusKey ===
+          "completed"
         ? "bg-blue-50 text-blue-700"
-        : status === "Cancelled"
+        : statusKey ===
+            "cancelled"
           ? "bg-red-50 text-red-700"
           : "bg-slate-100 text-slate-700"
 
@@ -778,21 +1792,28 @@ function BookingCard({
     0
       ? booking.seats
           .map(
-            (seat) =>
-              `Seat ${seat}`
+            (
+              seat
+            ) =>
+              `${copy.seat} ${formatNumber(
+                seat,
+                language
+              )}`
           )
-          .join(", ")
-      : "Not available"
+          .join(
+            ", "
+          )
+      : copy.notAvailable
 
   return (
     <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      {/* BOOKING HEADER */}
-
       <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <p className="font-semibold text-slate-900">
-              Booking{" "}
+              {
+                copy.booking
+              }{" "}
               {
                 booking.bookingReference
               }
@@ -801,20 +1822,21 @@ function BookingCard({
             <span
               className={`rounded-full px-3 py-1 text-xs font-medium ${statusStyles}`}
             >
-              {status}
+              {
+                status
+              }
             </span>
           </div>
 
           <p className="mt-1 text-sm text-slate-500">
             {booking.departureTime
               ? formatDate(
-                  booking.departureTime
+                  booking.departureTime,
+                  language
                 )
-              : "Date unavailable"}
+              : copy.dateUnavailable}
           </p>
         </div>
-
-        {/* ACTIONS */}
 
         <div className="flex flex-wrap gap-2">
           {booking.status.toLowerCase() ===
@@ -831,7 +1853,9 @@ function BookingCard({
             >
               <QrCode className="size-4" />
 
-              Show QR
+              {
+                copy.showQr
+              }
             </Button>
           )}
 
@@ -850,29 +1874,36 @@ function BookingCard({
               <XCircle className="size-4" />
 
               {cancelling
-                ? "Cancelling..."
-                : "Cancel booking"}
+                ? copy.cancelling
+                : copy.cancelBooking}
             </Button>
           )}
         </div>
       </div>
 
-      {/* BOOKING INFORMATION */}
-
       <div className="grid gap-6 p-5 lg:grid-cols-[1.3fr_0.7fr]">
         <div className="space-y-5">
-          {/* ROUTE */}
-
           <div className="grid gap-5 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
             <LocationBlock
               icon={
                 Navigation
               }
-              label="Pickup point"
+              label={
+                copy.pickupPoint
+              }
               value={
                 booking.pickupArea
-                  ? `${booking.pickupPoint}, ${booking.pickupArea}`
-                  : booking.pickupPoint
+                  ? `${translateLocationText(
+                      booking.pickupPoint,
+                      language
+                    )}, ${translateLocationText(
+                      booking.pickupArea,
+                      language
+                    )}`
+                  : translateLocationText(
+                      booking.pickupPoint,
+                      language
+                    )
               }
             />
 
@@ -888,27 +1919,33 @@ function BookingCard({
               icon={
                 MapPin
               }
-              label="Destination"
+              label={
+                copy.destination
+              }
               value={
-                booking.destination
+                translateLocationText(
+                  booking.destination,
+                  language
+                )
               }
             />
           </div>
-
-          {/* TRIP DETAILS */}
 
           <div className="grid gap-4 rounded-lg bg-slate-50 p-4 sm:grid-cols-3">
             <TripDetail
               icon={
                 CalendarDays
               }
-              label="Date"
+              label={
+                copy.date
+              }
               value={
                 booking.departureTime
                   ? formatDate(
-                      booking.departureTime
+                      booking.departureTime,
+                      language
                     )
-                  : "Unavailable"
+                  : copy.unavailable
               }
             />
 
@@ -916,13 +1953,16 @@ function BookingCard({
               icon={
                 Clock3
               }
-              label="Departure"
+              label={
+                copy.departure
+              }
               value={
                 booking.departureTime
                   ? formatTime(
-                      booking.departureTime
+                      booking.departureTime,
+                      language
                     )
-                  : "Unavailable"
+                  : copy.unavailable
               }
             />
 
@@ -930,7 +1970,9 @@ function BookingCard({
               icon={
                 UserRound
               }
-              label="Seat"
+              label={
+                copy.seat
+              }
               value={
                 seatText
               }
@@ -938,11 +1980,11 @@ function BookingCard({
           </div>
         </div>
 
-        {/* VEHICLE */}
-
         <div className="rounded-lg border border-slate-200 p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Vehicle details
+            {
+              copy.vehicleDetails
+            }
           </p>
 
           <div className="mt-4 flex items-start gap-3">
@@ -958,7 +2000,9 @@ function BookingCard({
               </p>
 
               <p className="mt-1 text-sm text-slate-500">
-                Plate number
+                {
+                  copy.plateNumber
+                }
               </p>
 
               <p className="mt-0.5 text-sm font-medium text-slate-800">
@@ -974,21 +2018,23 @@ function BookingCard({
   )
 }
 
-/*
- * =========================================
- * QR TICKET MODAL
- * =========================================
- */
-
 function QrTicketModal({
   booking,
   baseUrl,
   onClose,
+  language,
 }: {
   booking: Booking
   baseUrl: string
   onClose: () => void
+  language:
+    LanguagePreference
 }) {
+  const copy =
+    bookingsCopy[
+      language
+    ]
+
   const scanUrl =
     `${baseUrl}/scan/${encodeURIComponent(
       booking.bookingReference
@@ -999,38 +2045,52 @@ function QrTicketModal({
     0
       ? booking.seats
           .map(
-            (seat) =>
-              `${seat}`
+            (
+              seat
+            ) =>
+              formatNumber(
+                seat,
+                language
+              )
           )
-          .join(", ")
+          .join(
+            ", "
+          )
       : "N/A"
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        {/* Always-visible modal header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <p className="text-sm font-semibold text-[#512978]">
               CairoRoute
             </p>
+
             <p className="text-xs text-slate-500">
-              Boarding Ticket
+              {
+                copy.boardingTicket
+              }
             </p>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
-            aria-label="Close QR ticket"
-            title="Back to My Bookings"
+            onClick={
+              onClose
+            }
+            aria-label={
+              copy.closeQr
+            }
+            title={
+              copy.backBookings
+            }
             className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
           >
             <XCircle className="size-5" />
           </button>
         </div>
 
-        {/* Only the ticket content scrolls */}
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           <div className="text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-purple-50 text-[#512978]">
@@ -1038,18 +2098,26 @@ function QrTicketModal({
             </div>
 
             <h2 className="mt-3 text-2xl font-semibold text-slate-900">
-              Boarding Ticket
+              {
+                copy.boardingTicket
+              }
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
-              Show this QR code when boarding the bus.
+              {
+                copy.showQrDescription
+              }
             </p>
           </div>
 
           <div className="mt-6 flex justify-center rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
             <QRCodeSVG
-              value={scanUrl}
-              size={220}
+              value={
+                scanUrl
+              }
+              size={
+                220
+              }
               level="H"
               includeMargin
             />
@@ -1057,71 +2125,100 @@ function QrTicketModal({
 
           <div className="mt-5 space-y-3 rounded-xl bg-slate-50 p-4">
             <TicketRow
-              label="Booking"
-              value={booking.bookingReference}
+              label={
+                copy.bookingLabel
+              }
+              value={
+                booking.bookingReference
+              }
             />
 
             <TicketRow
-              label="Passenger"
-              value={booking.passengerName}
+              label={
+                copy.passenger
+              }
+              value={
+                booking.passengerName
+              }
             />
 
             <TicketRow
-              label="Seat"
-              value={seatText}
+              label={
+                copy.seat
+              }
+              value={
+                seatText
+              }
             />
 
             <TicketRow
-              label="Pickup"
-              value={booking.pickupPoint}
+              label={
+                copy.pickup
+              }
+              value={
+                translateLocationText(
+                  booking.pickupPoint,
+                  language
+                )
+              }
             />
 
             <TicketRow
-              label="Destination"
-              value={booking.destination}
+              label={
+                copy.destination
+              }
+              value={
+                translateLocationText(
+                  booking.destination,
+                  language
+                )
+              }
             />
 
             <TicketRow
-              label="Departure"
+              label={
+                copy.departure
+              }
               value={
                 booking.departureTime
                   ? `${formatDate(
-                      booking.departureTime
+                      booking.departureTime,
+                      language
                     )} • ${formatTime(
-                      booking.departureTime
+                      booking.departureTime,
+                      language
                     )}`
-                  : "Unavailable"
+                  : copy.unavailable
               }
             />
           </div>
 
           <div className="mt-4 rounded-lg border border-purple-100 bg-purple-50 p-3">
             <p className="text-center text-xs leading-5 text-slate-600">
-              Scan this ticket when boarding. Once verified, the booking will be marked as completed.
+              {
+                copy.scanDescription
+              }
             </p>
           </div>
         </div>
 
-        {/* Always-visible footer */}
         <div className="shrink-0 border-t border-slate-100 bg-white p-4">
           <Button
             type="button"
-            onClick={onClose}
+            onClick={
+              onClose
+            }
             className="w-full bg-[#512978] text-white hover:bg-[#40205f]"
           >
-            Back to My Bookings
+            {
+              copy.backBookings
+            }
           </Button>
         </div>
       </div>
     </div>
   )
 }
-
-/*
- * =========================================
- * TICKET ROW
- * =========================================
- */
 
 function TicketRow({
   label,
@@ -1143,19 +2240,14 @@ function TicketRow({
   )
 }
 
-/*
- * =========================================
- * SUMMARY CARD
- * =========================================
- */
-
 function SummaryCard({
   icon: Icon,
   label,
   value,
   description,
 }: {
-  icon: React.ElementType
+  icon:
+    React.ElementType
   label: string
   value: string
   description: string
@@ -1185,18 +2277,13 @@ function SummaryCard({
   )
 }
 
-/*
- * =========================================
- * LOCATION BLOCK
- * =========================================
- */
-
 function LocationBlock({
   icon: Icon,
   label,
   value,
 }: {
-  icon: React.ElementType
+  icon:
+    React.ElementType
   label: string
   value: string
 }) {
@@ -1219,18 +2306,13 @@ function LocationBlock({
   )
 }
 
-/*
- * =========================================
- * TRIP DETAIL
- * =========================================
- */
-
 function TripDetail({
   icon: Icon,
   label,
   value,
 }: {
-  icon: React.ElementType
+  icon:
+    React.ElementType
   label: string
   value: string
 }) {
@@ -1251,17 +2333,20 @@ function TripDetail({
   )
 }
 
-/*
- * =========================================
- * EMPTY STATE
- * =========================================
- */
-
 function EmptyBookingsState({
   activeTab,
+  language,
 }: {
-  activeTab: BookingTab
+  activeTab:
+    BookingTab
+  language:
+    LanguagePreference
 }) {
+  const copy =
+    bookingsCopy[
+      language
+    ]
+
   return (
     <div className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
       <div className="flex size-14 items-center justify-center rounded-full bg-purple-50 text-[#512978]">
@@ -1271,68 +2356,158 @@ function EmptyBookingsState({
       <h2 className="mt-4 text-lg font-semibold text-slate-900">
         {activeTab ===
         "upcoming"
-          ? "No upcoming bookings"
-          : "No previous bookings"}
+          ? copy.noUpcoming
+          : copy.noPrevious}
       </h2>
 
       <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
         {activeTab ===
         "upcoming"
-          ? "When you reserve a trip, your confirmed booking will appear here."
-          : "Your completed and cancelled trips will appear here."}
+          ? copy.noUpcomingDescription
+          : copy.noPreviousDescription}
       </p>
     </div>
   )
 }
 
-/*
- * =========================================
- * FORMATTING
- * =========================================
- */
-
 function formatStatus(
-  status: string
+  status: string,
+  language:
+    LanguagePreference
 ) {
-  if (!status) {
-    return "Unknown"
+  const copy =
+    bookingsCopy[
+      language
+    ]
+
+  const normalized =
+    status
+      ?.trim()
+      .toLowerCase()
+
+  if (
+    normalized ===
+    "confirmed"
+  ) {
+    return copy.confirmed
   }
 
-  return (
-    status
-      .charAt(0)
-      .toUpperCase() +
-    status
-      .slice(1)
-      .toLowerCase()
+  if (
+    normalized ===
+    "completed"
+  ) {
+    return copy.completed
+  }
+
+  if (
+    normalized ===
+    "cancelled"
+  ) {
+    return copy.cancelled
+  }
+
+  if (
+    !normalized
+  ) {
+    return copy.unknown
+  }
+
+  if (
+    language ===
+    "english"
+  ) {
+    return (
+      normalized
+        .charAt(
+          0
+        )
+        .toUpperCase() +
+      normalized.slice(
+        1
+      )
+    )
+  }
+
+  return status
+}
+
+function getLocale(
+  language:
+    LanguagePreference
+) {
+  if (
+    language ===
+    "arabic"
+  ) {
+    return "ar-EG"
+  }
+
+  if (
+    language ===
+    "french"
+  ) {
+    return "fr-FR"
+  }
+
+  return "en-EG"
+}
+
+function formatNumber(
+  value: number,
+  language:
+    LanguagePreference
+) {
+  return new Intl.NumberFormat(
+    getLocale(
+      language
+    )
+  ).format(
+    value
   )
 }
 
 function formatDate(
-  value: string
+  value: string,
+  language:
+    LanguagePreference
 ) {
   return new Intl.DateTimeFormat(
-    "en-EG",
+    getLocale(
+      language
+    ),
     {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
+      day:
+        "numeric",
+      month:
+        "long",
+      year:
+        "numeric",
     }
   ).format(
-    new Date(value)
+    new Date(
+      value
+    )
   )
 }
 
 function formatTime(
-  value: string
+  value: string,
+  language:
+    LanguagePreference
 ) {
   return new Intl.DateTimeFormat(
-    "en-EG",
+    getLocale(
+      language
+    ),
     {
-      hour: "numeric",
-      minute: "2-digit",
+      hour:
+        "numeric",
+      minute:
+        "2-digit",
     }
   ).format(
-    new Date(value)
+    new Date(
+      value
+    )
   )
 }

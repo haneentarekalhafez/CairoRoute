@@ -1,6 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowRight,
@@ -15,6 +19,10 @@ import {
 } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
+import {
+  useAppPreferences,
+  type LanguagePreference,
+} from "@/components/app-preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -32,7 +40,8 @@ import {
   SelectTrigger,
 } from "@/components/ui/select"
 
-const PAGE_LOAD_TIME = Date.now()
+const PAGE_LOAD_TIME =
+  Date.now()
 
 type Destination = {
   id: number
@@ -86,53 +95,601 @@ type NearestPickup = {
   distanceKm: number
 }
 
-export default function DashboardPage() {
-  const router = useRouter()
+/*
+ * =========================================
+ * DASHBOARD MESSAGES
+ * =========================================
+ */
 
-  const [currentLocation, setCurrentLocation] = useState("")
-  const [coordinates, setCoordinates] =
-    useState<Coordinates | null>(null)
+const dashboardMessages = {
+  english: {
+    failedPickupPoints:
+      "Failed to load pickup points.",
 
-  const [selectedDestinationId, setSelectedDestinationId] = useState("")
-  const [destinations, setDestinations] = useState<Destination[]>([])
-  const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([])
-  const [bookings, setBookings] = useState<Booking[]>([])
+    failedBookings:
+      "Failed to load bookings.",
 
-  const [destinationsLoading, setDestinationsLoading] = useState(true)
-  const [dashboardLoading, setDashboardLoading] = useState(true)
+    browserLocationUnsupported:
+      "Your browser does not support location detection.",
 
-  const [destinationsError, setDestinationsError] = useState("")
-  const [message, setMessage] = useState("")
+    detectingLocation:
+      "Detecting your current location...",
 
-  const selectedDestination = destinations.find(
-    (destination) =>
-      destination.id.toString() === selectedDestinationId
+    locationDetected:
+      "Your location was detected successfully.",
+
+    locationBlocked:
+      "Location permission was blocked. Enter your location manually.",
+
+    missingSearchFields:
+      "Enter your current location and select a destination.",
+
+    useCurrentLocation:
+      "Use current location",
+  },
+
+  arabic: {
+    failedPickupPoints:
+      "تعذر تحميل نقاط الركوب.",
+
+    failedBookings:
+      "تعذر تحميل الحجوزات.",
+
+    browserLocationUnsupported:
+      "متصفحك لا يدعم تحديد الموقع.",
+
+    detectingLocation:
+      "جارٍ تحديد موقعك الحالي...",
+
+    locationDetected:
+      "تم تحديد موقعك بنجاح.",
+
+    locationBlocked:
+      "تم حظر إذن الموقع. أدخل موقعك يدويًا.",
+
+    missingSearchFields:
+      "أدخل موقعك الحالي واختر وجهة.",
+
+    useCurrentLocation:
+      "استخدام الموقع الحالي",
+  },
+
+  french: {
+    failedPickupPoints:
+      "Impossible de charger les points de prise en charge.",
+
+    failedBookings:
+      "Impossible de charger les réservations.",
+
+    browserLocationUnsupported:
+      "Votre navigateur ne prend pas en charge la détection de la position.",
+
+    detectingLocation:
+      "Détection de votre position actuelle...",
+
+    locationDetected:
+      "Votre position a été détectée avec succès.",
+
+    locationBlocked:
+      "L’autorisation de localisation a été bloquée. Entrez votre position manuellement.",
+
+    missingSearchFields:
+      "Entrez votre position actuelle et sélectionnez une destination.",
+
+    useCurrentLocation:
+      "Utiliser la position actuelle",
+  },
+} as const
+
+/*
+ * =========================================
+ * DATABASE DISPLAY TRANSLATIONS
+ *
+ * IMPORTANT:
+ * These translations are ONLY used when
+ * displaying database values.
+ *
+ * The real database value remains unchanged.
+ * =========================================
+ */
+
+const locationTranslations: Record<
+  string,
+  {
+    arabic: string
+    french: string
+  }
+> = {
+  "new cairo": {
+    arabic: "القاهرة الجديدة",
+    french: "Nouveau Caire",
+  },
+
+  "fifth settlement": {
+    arabic: "التجمع الخامس",
+    french: "Cinquième arrondissement",
+  },
+
+  "5th settlement": {
+    arabic: "التجمع الخامس",
+    french: "Cinquième arrondissement",
+  },
+
+  "first settlement": {
+    arabic: "التجمع الأول",
+    french: "Premier arrondissement",
+  },
+
+  "third settlement": {
+    arabic: "التجمع الثالث",
+    french: "Troisième arrondissement",
+  },
+
+  rehab: {
+    arabic: "الرحاب",
+    french: "Al Rehab",
+  },
+
+  "el rehab": {
+    arabic: "الرحاب",
+    french: "Al Rehab",
+  },
+
+  madinaty: {
+    arabic: "مدينتي",
+    french: "Madinaty",
+  },
+
+  shorouk: {
+    arabic: "الشروق",
+    french: "El Shorouk",
+  },
+
+  "el shorouk": {
+    arabic: "الشروق",
+    french: "El Shorouk",
+  },
+
+  maadi: {
+    arabic: "المعادي",
+    french: "Maadi",
+  },
+
+  "el maadi": {
+    arabic: "المعادي",
+    french: "Maadi",
+  },
+
+  "nasr city": {
+    arabic: "مدينة نصر",
+    french: "Nasr City",
+  },
+
+  "madinet nasr": {
+    arabic: "مدينة نصر",
+    french: "Nasr City",
+  },
+
+  "heliopolis": {
+    arabic: "مصر الجديدة",
+    french: "Héliopolis",
+  },
+
+  "masr el gedida": {
+    arabic: "مصر الجديدة",
+    french: "Héliopolis",
+  },
+
+  "misr el gedida": {
+    arabic: "مصر الجديدة",
+    french: "Héliopolis",
+  },
+
+  "6th of october": {
+    arabic: "6 أكتوبر",
+    french: "6 Octobre",
+  },
+
+  "6 october": {
+    arabic: "6 أكتوبر",
+    french: "6 Octobre",
+  },
+
+  "october": {
+    arabic: "أكتوبر",
+    french: "Octobre",
+  },
+
+  "sheikh zayed": {
+    arabic: "الشيخ زايد",
+    french: "Cheikh Zayed",
+  },
+
+  "downtown cairo": {
+    arabic: "وسط القاهرة",
+    french: "Centre-ville du Caire",
+  },
+
+  downtown: {
+    arabic: "وسط البلد",
+    french: "Centre-ville",
+  },
+
+  "new capital": {
+    arabic: "العاصمة الإدارية الجديدة",
+    french: "Nouvelle capitale administrative",
+  },
+
+  "new administrative capital": {
+    arabic: "العاصمة الإدارية الجديدة",
+    french: "Nouvelle capitale administrative",
+  },
+
+  "abbas el akkاد": {
+    arabic: "عباس العقاد",
+    french: "Abbas El Akkad",
+  },
+
+  "abbas el akkad": {
+    arabic: "عباس العقاد",
+    french: "Abbas El Akkad",
+  },
+
+  "makram ebeid": {
+    arabic: "مكرم عبيد",
+    french: "Makram Ebeid",
+  },
+
+  "el tesعين": {
+    arabic: "التسعين",
+    french: "Rue 90",
+  },
+
+  "90th street": {
+    arabic: "شارع التسعين",
+    french: "Rue 90",
+  },
+
+  "north 90th street": {
+    arabic: "شارع التسعين الشمالي",
+    french: "Rue 90 Nord",
+  },
+
+  "south 90th street": {
+    arabic: "شارع التسعين الجنوبي",
+    french: "Rue 90 Sud",
+  },
+
+  "cairo festival city": {
+    arabic: "كايرو فيستيفال سيتي",
+    french: "Cairo Festival City",
+  },
+
+  "point 90": {
+    arabic: "بوينت 90",
+    french: "Point 90",
+  },
+
+  "american university in cairo": {
+    arabic: "الجامعة الأمريكية بالقاهرة",
+    french: "Université américaine du Caire",
+  },
+
+  "auc": {
+    arabic: "الجامعة الأمريكية بالقاهرة",
+    french: "Université américaine du Caire",
+  },
+
+  "ramses": {
+    arabic: "رمسيس",
+    french: "Ramsès",
+  },
+
+  "tahrir": {
+    arabic: "التحرير",
+    french: "Tahrir",
+  },
+
+  "zamalek": {
+    arabic: "الزمالك",
+    french: "Zamalek",
+  },
+
+  "dokki": {
+    arabic: "الدقي",
+    french: "Dokki",
+  },
+
+  "mohandessin": {
+    arabic: "المهندسين",
+    french: "Mohandessin",
+  },
+
+  "giza": {
+    arabic: "الجيزة",
+    french: "Gizeh",
+  },
+
+  "katameya": {
+    arabic: "القطامية",
+    french: "Katameya",
+  },
+
+  "mokattam": {
+    arabic: "المقطم",
+    french: "Mokattam",
+  },
+
+  "ain shams": {
+    arabic: "عين شمس",
+    french: "Aïn Shams",
+  },
+
+  "new nozha": {
+    arabic: "النزهة الجديدة",
+    french: "Nouvelle Nozha",
+  },
+
+  "nozha": {
+    arabic: "النزهة",
+    french: "Nozha",
+  },
+
+  "obour": {
+    arabic: "العبور",
+    french: "Obour",
+  },
+
+  "el obour": {
+    arabic: "العبور",
+    french: "Obour",
+  },
+
+  "badr city": {
+    arabic: "مدينة بدر",
+    french: "Ville de Badr",
+  },
+
+  "future city": {
+    arabic: "مستقبل سيتي",
+    french: "Mostakbal City",
+  },
+
+  "mostakbal city": {
+    arabic: "مستقبل سيتي",
+    french: "Mostakbal City",
+  },
+}
+
+/*
+ * =========================================
+ * TRANSLATE DATABASE TEXT
+ * =========================================
+ */
+
+function translateLocationText(
+  value: string | null | undefined,
+  language: LanguagePreference
+) {
+  if (!value) {
+    return ""
+  }
+
+  if (
+    language ===
+    "english"
+  ) {
+    return value
+  }
+
+  const normalized =
+    value
+      .trim()
+      .toLowerCase()
+
+  const directMatch =
+    locationTranslations[
+      normalized
+    ]
+
+  if (directMatch) {
+    return directMatch[
+      language
+    ]
+  }
+
+  /*
+   * Try replacing known location names
+   * inside a longer database string.
+   *
+   * Example:
+   * "Nasr City - Abbas El Akkad"
+   *
+   * Arabic:
+   * "مدينة نصر - عباس العقاد"
+   */
+
+  let translated =
+    value
+
+  const entries =
+    Object.entries(
+      locationTranslations
+    ).sort(
+      (
+        [a],
+        [b]
+      ) =>
+        b.length -
+        a.length
+    )
+
+  for (
+    const [
+      english,
+      translation,
+    ] of entries
+  ) {
+    const expression =
+      new RegExp(
+        escapeRegExp(
+          english
+        ),
+        "gi"
+      )
+
+    translated =
+      translated.replace(
+        expression,
+        translation[
+          language
+        ]
+      )
+  }
+
+  return translated
+}
+
+function escapeRegExp(
+  value: string
+) {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
   )
+}
+
+export default function DashboardPage() {
+  const router =
+    useRouter()
+
+  const {
+    language,
+    t,
+  } =
+    useAppPreferences()
+
+  const copy =
+    dashboardMessages[
+      language
+    ]
+
+  const [
+    currentLocation,
+    setCurrentLocation,
+  ] =
+    useState("")
+
+  const [
+    coordinates,
+    setCoordinates,
+  ] =
+    useState<Coordinates | null>(
+      null
+    )
+
+  const [
+    selectedDestinationId,
+    setSelectedDestinationId,
+  ] =
+    useState("")
+
+  const [
+    destinations,
+    setDestinations,
+  ] =
+    useState<Destination[]>(
+      []
+    )
+
+  const [
+    pickupPoints,
+    setPickupPoints,
+  ] =
+    useState<PickupPoint[]>(
+      []
+    )
+
+  const [
+    bookings,
+    setBookings,
+  ] =
+    useState<Booking[]>(
+      []
+    )
+
+  const [
+    destinationsLoading,
+    setDestinationsLoading,
+  ] =
+    useState(true)
+
+  const [
+    dashboardLoading,
+    setDashboardLoading,
+  ] =
+    useState(true)
+
+  const [
+    destinationsError,
+    setDestinationsError,
+  ] =
+    useState("")
+
+  const [
+    message,
+    setMessage,
+  ] =
+    useState("")
+
+  const selectedDestination =
+    destinations.find(
+      (
+        destination
+      ) =>
+        destination.id.toString() ===
+        selectedDestinationId
+    )
 
   useEffect(() => {
     async function loadDestinations() {
       try {
-        const response = await fetch("/api/destinations", {
-          cache: "no-store",
-        })
+        const response =
+          await fetch(
+            "/api/destinations",
+            {
+              cache:
+                "no-store",
+            }
+          )
 
-        const result = await response.json()
+        const result =
+          await response.json()
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
-            result.message || "Failed to load destinations."
+            result.message ||
+              "Failed to load destinations."
           )
         }
 
-        setDestinations(result)
-      } catch (error) {
+        setDestinations(
+          result
+        )
+      } catch (
+        error
+      ) {
         setDestinationsError(
           error instanceof Error
             ? error.message
             : "Failed to load destinations."
         )
       } finally {
-        setDestinationsLoading(false)
+        setDestinationsLoading(
+          false
+        )
       }
     }
 
@@ -142,155 +699,270 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadPickupPoints() {
       try {
-        const response = await fetch("/api/pickup-points", {
-          cache: "no-store",
-        })
+        const response =
+          await fetch(
+            "/api/pickup-points",
+            {
+              cache:
+                "no-store",
+            }
+          )
 
-        const result = await response.json()
+        const result =
+          await response.json()
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
-            result.message || "Failed to load pickup points."
+            result.message ||
+              "Failed to load pickup points."
           )
         }
 
-        setPickupPoints(result)
-      } catch (error) {
-        console.error("Failed to load pickup points:", error)
+        setPickupPoints(
+          result
+        )
+      } catch (
+        error
+      ) {
+        console.error(
+          copy.failedPickupPoints,
+          error
+        )
       }
     }
 
     loadPickupPoints()
-  }, [])
+  }, [
+    copy.failedPickupPoints,
+  ])
 
   useEffect(() => {
     async function loadBookings() {
       try {
-        const supabase = createClient()
+        const supabase =
+          createClient()
 
         const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession()
+          data: {
+            session,
+          },
+          error:
+            sessionError,
+        } =
+          await supabase.auth.getSession()
 
-        if (sessionError || !session) {
+        if (
+          sessionError ||
+          !session
+        ) {
           return
         }
 
-        const response = await fetch("/api/my-bookings", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          cache: "no-store",
-        })
+        const response =
+          await fetch(
+            "/api/my-bookings",
+            {
+              method:
+                "GET",
+
+              headers: {
+                Authorization:
+                  `Bearer ${session.access_token}`,
+              },
+
+              cache:
+                "no-store",
+            }
+          )
 
         const result =
           (await response.json()) as BookingsResponse
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
             result.error
               ? `${result.message} ${result.error}`
-              : result.message || "Failed to load bookings."
+              : result.message ||
+                "Failed to load bookings."
           )
         }
 
-        setBookings(result.bookings ?? [])
-      } catch (error) {
+        setBookings(
+          result.bookings ??
+            []
+        )
+      } catch (
+        error
+      ) {
         console.error(
-          "Failed to load dashboard bookings:",
+          copy.failedBookings,
           error
         )
       } finally {
-        setDashboardLoading(false)
+        setDashboardLoading(
+          false
+        )
       }
     }
 
     loadBookings()
-  }, [])
+  }, [
+    copy.failedBookings,
+  ])
 
-  const nextBooking = useMemo(() => {
-    return (
-      bookings
-        .filter((booking) => {
-          if (booking.status.toLowerCase() !== "confirmed") {
-            return false
-          }
+  const nextBooking =
+    useMemo(() => {
+      return (
+        bookings
+          .filter(
+            (
+              booking
+            ) => {
+              if (
+                booking.status.toLowerCase() !==
+                "confirmed"
+              ) {
+                return false
+              }
 
-          if (!booking.departureTime) {
-            return false
-          }
+              if (
+                !booking.departureTime
+              ) {
+                return false
+              }
 
-          const departure = new Date(
-            booking.departureTime
-          ).getTime()
+              const departure =
+                new Date(
+                  booking.departureTime
+                ).getTime()
 
-          return departure > PAGE_LOAD_TIME
-        })
-        .sort((a, b) => {
-          const aTime = new Date(
-            a.departureTime!
-          ).getTime()
+              return (
+                departure >
+                PAGE_LOAD_TIME
+              )
+            }
+          )
+          .sort(
+            (
+              a,
+              b
+            ) => {
+              const aTime =
+                new Date(
+                  a.departureTime!
+                ).getTime()
 
-          const bTime = new Date(
-            b.departureTime!
-          ).getTime()
+              const bTime =
+                new Date(
+                  b.departureTime!
+                ).getTime()
 
-          return aTime - bTime
-        })[0] ?? null
-    )
-  }, [bookings])
+              return (
+                aTime -
+                bTime
+              )
+            }
+          )[0] ??
+        null
+      )
+    }, [
+      bookings,
+    ])
 
   const nearestPickup =
-    useMemo<NearestPickup | null>(() => {
-      if (!coordinates) {
-        return null
-      }
+    useMemo<NearestPickup | null>(
+      () => {
+        if (
+          !coordinates
+        ) {
+          return null
+        }
 
-      const validPickupPoints = pickupPoints.filter(
-        (pickup) =>
-          pickup.latitude !== null &&
-          pickup.longitude !== null
-      )
+        const validPickupPoints =
+          pickupPoints.filter(
+            (
+              pickup
+            ) =>
+              pickup.latitude !==
+                null &&
+              pickup.longitude !==
+                null
+          )
 
-      if (validPickupPoints.length === 0) {
-        return null
-      }
+        if (
+          validPickupPoints.length ===
+          0
+        ) {
+          return null
+        }
 
-      const calculated = validPickupPoints.map(
-        (pickup) => ({
-          pickup,
-          distanceKm: calculateDistanceKm(
-            coordinates.latitude,
-            coordinates.longitude,
-            pickup.latitude!,
-            pickup.longitude!
-          ),
-        })
-      )
+        const calculated =
+          validPickupPoints.map(
+            (
+              pickup
+            ) => ({
+              pickup,
 
-      calculated.sort(
-        (a, b) => a.distanceKm - b.distanceKm
-      )
+              distanceKm:
+                calculateDistanceKm(
+                  coordinates.latitude,
+                  coordinates.longitude,
+                  pickup.latitude!,
+                  pickup.longitude!
+                ),
+            })
+          )
 
-      return calculated[0] ?? null
-    }, [coordinates, pickupPoints])
+        calculated.sort(
+          (
+            a,
+            b
+          ) =>
+            a.distanceKm -
+            b.distanceKm
+        )
+
+        return (
+          calculated[0] ??
+          null
+        )
+      },
+      [
+        coordinates,
+        pickupPoints,
+      ]
+    )
 
   function detectLocation() {
-    if (!navigator.geolocation) {
+    if (
+      !navigator.geolocation
+    ) {
       setMessage(
-        "Your browser does not support location detection."
+        copy.browserLocationUnsupported
       )
+
       return
     }
 
-    setMessage("Detecting your current location...")
+    setMessage(
+      copy.detectingLocation
+    )
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = position.coords.latitude
-        const longitude = position.coords.longitude
+      (
+        position
+      ) => {
+        const latitude =
+          position.coords
+            .latitude
+
+        const longitude =
+          position.coords
+            .longitude
 
         setCoordinates({
           latitude,
@@ -298,46 +970,81 @@ export default function DashboardPage() {
         })
 
         setCurrentLocation(
-          `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          `${latitude.toFixed(
+            6
+          )}, ${longitude.toFixed(
+            6
+          )}`
         )
 
         setMessage(
-          "Your location was detected successfully."
+          copy.locationDetected
         )
       },
+
       () => {
         setMessage(
-          "Location permission was blocked. Enter your location manually."
+          copy.locationBlocked
         )
       }
     )
   }
 
-  function handleLocationChange(value: string) {
-    setCurrentLocation(value)
+  function handleLocationChange(
+    value: string
+  ) {
+    setCurrentLocation(
+      value
+    )
+
     setMessage("")
 
-    const parsed = parseCoordinates(value)
-    setCoordinates(parsed)
+    const parsed =
+      parseCoordinates(
+        value
+      )
+
+    setCoordinates(
+      parsed
+    )
   }
 
   function searchRoutes() {
-    const cleanLocation = currentLocation.trim()
+    const cleanLocation =
+      currentLocation.trim()
 
-    if (!cleanLocation || !selectedDestination) {
+    if (
+      !cleanLocation ||
+      !selectedDestination
+    ) {
       setMessage(
-        "Enter your current location and select a destination."
+        copy.missingSearchFields
       )
+
       return
     }
 
     setMessage("")
 
-    const params = new URLSearchParams({
-      from: cleanLocation,
-      to: selectedDestination.name,
-      destinationId: selectedDestination.id.toString(),
-    })
+    /*
+     * IMPORTANT:
+     * We use the ORIGINAL database name here.
+     *
+     * We do NOT send the Arabic/French display
+     * translation to the API.
+     */
+    const params =
+      new URLSearchParams(
+        {
+          from: cleanLocation,
+
+          to:
+            selectedDestination.name,
+
+          destinationId:
+            selectedDestination.id.toString(),
+        }
+      )
 
     router.push(
       `/dashboard/results?${params.toString()}`
@@ -345,15 +1052,21 @@ export default function DashboardPage() {
   }
 
   function handleLocationKeyDown(
-    event: React.KeyboardEvent<HTMLInputElement>
+    event:
+      React.KeyboardEvent<HTMLInputElement>
   ) {
-    if (event.key === "Enter") {
+    if (
+      event.key ===
+      "Enter"
+    ) {
       searchRoutes()
     }
   }
 
   function openBookings() {
-    router.push("/dashboard/bookings")
+    router.push(
+      "/dashboard/bookings"
+    )
   }
 
   return (
@@ -361,7 +1074,8 @@ export default function DashboardPage() {
       <section
         className="relative min-h-[320px] overflow-hidden rounded-2xl bg-slate-800 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('/images/cairo-bus.jpeg')",
+          backgroundImage:
+            "url('/images/cairo-bus.jpeg')",
         }}
       >
         <div className="absolute inset-0 bg-slate-950/55" />
@@ -371,16 +1085,21 @@ export default function DashboardPage() {
         <div className="relative flex min-h-[320px] items-end p-7 text-white md:p-10">
           <div className="max-w-2xl">
             <p className="text-sm font-medium text-white/75">
-              Transportation across Cairo
+              {t(
+                "transportationAcrossCairo"
+              )}
             </p>
 
             <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-              Where do you want to go?
+              {t(
+                "whereDoYouWantToGo"
+              )}
             </h1>
 
             <p className="mt-3 max-w-xl text-sm leading-7 text-white/85 md:text-base">
-              Enter your destination and we will suggest the nearest suitable
-              pickup point based on your current location.
+              {t(
+                "dashboardHeroDescription"
+              )}
             </p>
           </div>
         </div>
@@ -395,11 +1114,15 @@ export default function DashboardPage() {
 
             <div>
               <CardTitle className="text-xl text-slate-900">
-                Plan your trip
+                {t(
+                  "planYourTrip"
+                )}
               </CardTitle>
 
               <CardDescription className="mt-1">
-                Use your current location and select your destination.
+                {t(
+                  "planTripDescription"
+                )}
               </CardDescription>
             </div>
           </div>
@@ -412,7 +1135,9 @@ export default function DashboardPage() {
                 htmlFor="current-location"
                 className="text-sm font-medium text-slate-700"
               >
-                Current location
+                {t(
+                  "currentLocation"
+                )}
               </Label>
 
               <div className="relative">
@@ -420,23 +1145,38 @@ export default function DashboardPage() {
 
                 <Input
                   id="current-location"
-                  value={currentLocation}
-                  onChange={(event) =>
+                  value={
+                    currentLocation
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     handleLocationChange(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
-                  onKeyDown={handleLocationKeyDown}
-                  placeholder="Enter your current location"
+                  onKeyDown={
+                    handleLocationKeyDown
+                  }
+                  placeholder={t(
+                    "enterCurrentLocation"
+                  )}
                   className="h-12 border-slate-300 bg-white pl-10 pr-12"
                 />
 
                 <button
                   type="button"
-                  onClick={detectLocation}
+                  onClick={
+                    detectLocation
+                  }
                   className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-[#512978] transition hover:bg-purple-50"
-                  aria-label="Use current location"
-                  title="Use current location"
+                  aria-label={
+                    copy.useCurrentLocation
+                  }
+                  title={
+                    copy.useCurrentLocation
+                  }
                 >
                   <LocateFixed className="size-5" />
                 </button>
@@ -448,20 +1188,36 @@ export default function DashboardPage() {
                 htmlFor="destination"
                 className="text-sm font-medium text-slate-700"
               >
-                Destination
+                {t(
+                  "destination"
+                )}
               </Label>
 
               <Select
-                value={selectedDestinationId}
-                onValueChange={(value) => {
-                  if (value !== null) {
-                    setSelectedDestinationId(value)
-                    setMessage("")
+                value={
+                  selectedDestinationId
+                }
+                onValueChange={(
+                  value
+                ) => {
+                  if (
+                    value !==
+                    null
+                  ) {
+                    setSelectedDestinationId(
+                      value
+                    )
+
+                    setMessage(
+                      ""
+                    )
                   }
                 }}
                 disabled={
                   destinationsLoading ||
-                  Boolean(destinationsError)
+                  Boolean(
+                    destinationsError
+                  )
                 }
               >
                 <SelectTrigger
@@ -479,43 +1235,70 @@ export default function DashboardPage() {
                       }
                     >
                       {destinationsLoading
-                        ? "Loading destinations..."
-                        : selectedDestination?.name ||
-                          "Select your destination"}
+                        ? t(
+                            "loadingDestinations"
+                          )
+                        : selectedDestination
+                          ? translateLocationText(
+                              selectedDestination.name,
+                              language
+                            )
+                          : t(
+                              "selectDestination"
+                            )}
                     </span>
                   </div>
                 </SelectTrigger>
 
                 <SelectContent>
-                  {destinations.map((destination) => (
-                    <SelectItem
-                      key={destination.id}
-                      value={destination.id.toString()}
-                    >
-                      {destination.name}
-                    </SelectItem>
-                  ))}
+                  {destinations.map(
+                    (
+                      destination
+                    ) => (
+                      <SelectItem
+                        key={
+                          destination.id
+                        }
+                        value={destination.id.toString()}
+                      >
+                        {translateLocationText(
+                          destination.name,
+                          language
+                        )}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
 
               {destinationsError && (
                 <p className="text-sm text-red-600">
-                  {destinationsError}
+                  {
+                    destinationsError
+                  }
                 </p>
               )}
             </div>
 
             <Button
               type="button"
-              onClick={searchRoutes}
+              onClick={
+                searchRoutes
+              }
               disabled={
                 destinationsLoading ||
-                Boolean(destinationsError) ||
-                destinations.length === 0
+                Boolean(
+                  destinationsError
+                ) ||
+                destinations.length ===
+                  0
               }
               className="h-12 bg-[#512978] px-6 text-white hover:bg-[#40205f]"
             >
-              Search routes
+              {t(
+                "searchRoutes"
+              )}
+
               <ArrowRight className="size-4" />
             </Button>
           </div>
@@ -538,11 +1321,15 @@ export default function DashboardPage() {
 
               <div>
                 <CardTitle className="text-lg text-slate-900">
-                  Upcoming trip
+                  {t(
+                    "upcomingTrip"
+                  )}
                 </CardTitle>
 
                 <CardDescription className="mt-1">
-                  Your next confirmed reservation
+                  {t(
+                    "upcomingTripDescription"
+                  )}
                 </CardDescription>
               </div>
             </div>
@@ -552,7 +1339,9 @@ export default function DashboardPage() {
             {dashboardLoading ? (
               <div className="flex min-h-44 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 p-6">
                 <p className="text-sm text-slate-500">
-                  Loading your next trip...
+                  {t(
+                    "loadingNextTrip"
+                  )}
                 </p>
               </div>
             ) : nextBooking ? (
@@ -564,59 +1353,102 @@ export default function DashboardPage() {
 
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900">
-                      {nextBooking.pickupPoint} →{" "}
-                      {nextBooking.destination}
+                      {translateLocationText(
+                        nextBooking.pickupPoint,
+                        language
+                      )}{" "}
+                      →{" "}
+                      {translateLocationText(
+                        nextBooking.destination,
+                        language
+                      )}
                     </p>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      {nextBooking.bus}
+                      {
+                        nextBooking.bus
+                      }
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <DashboardDetail
-                    icon={CalendarDays}
-                    label="Date"
+                    icon={
+                      CalendarDays
+                    }
+                    label={t(
+                      "date"
+                    )}
                     value={
                       nextBooking.departureTime
                         ? formatDate(
-                            nextBooking.departureTime
+                            nextBooking.departureTime,
+                            language
                           )
-                        : "Unavailable"
+                        : t(
+                            "unavailable"
+                          )
                     }
                   />
 
                   <DashboardDetail
-                    icon={Clock3}
-                    label="Departure"
+                    icon={
+                      Clock3
+                    }
+                    label={t(
+                      "departure"
+                    )}
                     value={
                       nextBooking.departureTime
                         ? formatTime(
-                            nextBooking.departureTime
+                            nextBooking.departureTime,
+                            language
                           )
-                        : "Unavailable"
+                        : t(
+                            "unavailable"
+                          )
                     }
                   />
 
                   <DashboardDetail
-                    icon={TicketCheck}
-                    label="Seat"
+                    icon={
+                      TicketCheck
+                    }
+                    label={t(
+                      "seat"
+                    )}
                     value={
-                      nextBooking.seats.length > 0
+                      nextBooking.seats.length >
+                      0
                         ? nextBooking.seats
-                            .map((seat) => `${seat}`)
-                            .join(", ")
-                        : "Unavailable"
+                            .map(
+                              (
+                                seat
+                              ) =>
+                                `${seat}`
+                            )
+                            .join(
+                              ", "
+                            )
+                        : t(
+                            "unavailable"
+                          )
                     }
                   />
 
                   <DashboardDetail
-                    icon={BusFront}
-                    label="Plate"
+                    icon={
+                      BusFront
+                    }
+                    label={t(
+                      "plate"
+                    )}
                     value={
                       nextBooking.plateNumber ||
-                      "Unavailable"
+                      t(
+                        "unavailable"
+                      )
                     }
                   />
                 </div>
@@ -624,10 +1456,15 @@ export default function DashboardPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={openBookings}
+                  onClick={
+                    openBookings
+                  }
                   className="mt-5 w-full border-purple-200 text-[#512978] hover:bg-purple-50"
                 >
-                  View my booking
+                  {t(
+                    "viewMyBooking"
+                  )}
+
                   <ArrowRight className="size-4" />
                 </Button>
               </div>
@@ -636,11 +1473,15 @@ export default function DashboardPage() {
                 <BusFront className="mb-3 size-8 text-slate-400" />
 
                 <p className="font-medium text-slate-800">
-                  No upcoming trips
+                  {t(
+                    "noUpcomingTrips"
+                  )}
                 </p>
 
                 <p className="mt-1 max-w-xs text-sm text-slate-500">
-                  Your confirmed bus reservations will appear here.
+                  {t(
+                    "noUpcomingTripsDescription"
+                  )}
                 </p>
               </div>
             )}
@@ -656,11 +1497,15 @@ export default function DashboardPage() {
 
               <div>
                 <CardTitle className="text-lg text-slate-900">
-                  Nearest pickup point
+                  {t(
+                    "nearestPickupPoint"
+                  )}
                 </CardTitle>
 
                 <CardDescription className="mt-1">
-                  Suggested using your current location
+                  {t(
+                    "nearestPickupDescription"
+                  )}
                 </CardDescription>
               </div>
             </div>
@@ -676,12 +1521,20 @@ export default function DashboardPage() {
 
                   <div>
                     <p className="font-semibold text-slate-900">
-                      {nearestPickup.pickup.name}
+                      {translateLocationText(
+                        nearestPickup.pickup.name,
+                        language
+                      )}
                     </p>
 
-                    {nearestPickup.pickup.area && (
+                    {nearestPickup
+                      .pickup
+                      .area && (
                       <p className="mt-1 text-sm text-slate-500">
-                        {nearestPickup.pickup.area}
+                        {translateLocationText(
+                          nearestPickup.pickup.area,
+                          language
+                        )}
                       </p>
                     )}
                   </div>
@@ -689,17 +1542,22 @@ export default function DashboardPage() {
 
                 <div className="mt-5 rounded-lg bg-white p-4">
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Approximate distance
+                    {t(
+                      "approximateDistance"
+                    )}
                   </p>
 
                   <p className="mt-1 text-2xl font-semibold text-[#512978]">
                     {formatDistance(
-                      nearestPickup.distanceKm
+                      nearestPickup.distanceKm,
+                      language
                     )}
                   </p>
 
                   <p className="mt-1 text-xs text-slate-500">
-                    Straight-line distance from your detected location.
+                    {t(
+                      "straightLineDistance"
+                    )}
                   </p>
                 </div>
               </div>
@@ -708,21 +1566,30 @@ export default function DashboardPage() {
                 <MapPin className="mb-3 size-8 text-slate-400" />
 
                 <p className="font-medium text-slate-800">
-                  Location not selected
+                  {t(
+                    "locationNotSelected"
+                  )}
                 </p>
 
                 <p className="mt-1 max-w-xs text-sm text-slate-500">
-                  Detect your location to view the nearest pickup point.
+                  {t(
+                    "locationNotSelectedDescription"
+                  )}
                 </p>
 
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={detectLocation}
+                  onClick={
+                    detectLocation
+                  }
                   className="mt-4 border-purple-200 text-[#512978] hover:bg-purple-50"
                 >
                   <LocateFixed className="size-4" />
-                  Detect location
+
+                  {t(
+                    "detectLocation"
+                  )}
                 </Button>
               </div>
             )}
@@ -762,20 +1629,40 @@ function DashboardDetail({
 function parseCoordinates(
   value: string
 ): Coordinates | null {
-  const parts = value
-    .split(",")
-    .map((part) => part.trim())
+  const parts =
+    value
+      .split(",")
+      .map(
+        (
+          part
+        ) =>
+          part.trim()
+      )
 
-  if (parts.length !== 2) {
+  if (
+    parts.length !==
+    2
+  ) {
     return null
   }
 
-  const latitude = Number(parts[0])
-  const longitude = Number(parts[1])
+  const latitude =
+    Number(
+      parts[0]
+    )
+
+  const longitude =
+    Number(
+      parts[1]
+    )
 
   if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude)
+    !Number.isFinite(
+      latitude
+    ) ||
+    !Number.isFinite(
+      longitude
+    )
   ) {
     return null
   }
@@ -801,83 +1688,177 @@ function calculateDistanceKm(
   latitude2: number,
   longitude2: number
 ) {
-  const earthRadiusKm = 6371
+  const earthRadiusKm =
+    6371
 
   const latitudeDifference =
     degreesToRadians(
-      latitude2 - latitude1
+      latitude2 -
+        latitude1
     )
 
   const longitudeDifference =
     degreesToRadians(
-      longitude2 - longitude1
+      longitude2 -
+        longitude1
     )
 
   const firstLatitude =
-    degreesToRadians(latitude1)
+    degreesToRadians(
+      latitude1
+    )
 
   const secondLatitude =
-    degreesToRadians(latitude2)
+    degreesToRadians(
+      latitude2
+    )
 
   const a =
     Math.sin(
-      latitudeDifference / 2
-    ) ** 2 +
-    Math.cos(firstLatitude) *
-      Math.cos(secondLatitude) *
+      latitudeDifference /
+        2
+    ) **
+      2 +
+    Math.cos(
+      firstLatitude
+    ) *
+      Math.cos(
+        secondLatitude
+      ) *
       Math.sin(
-        longitudeDifference / 2
-      ) ** 2
+        longitudeDifference /
+          2
+      ) **
+        2
 
   const c =
     2 *
     Math.atan2(
       Math.sqrt(a),
-      Math.sqrt(1 - a)
+      Math.sqrt(
+        1 - a
+      )
     )
 
-  return earthRadiusKm * c
+  return (
+    earthRadiusKm *
+    c
+  )
 }
 
 function degreesToRadians(
   degrees: number
 ) {
-  return degrees * (Math.PI / 180)
+  return (
+    degrees *
+    (Math.PI /
+      180)
+  )
 }
 
 function formatDistance(
-  distanceKm: number
+  distanceKm: number,
+  language:
+    LanguagePreference
 ) {
-  if (distanceKm < 1) {
-    return `${Math.round(
-      distanceKm * 1000
-    )} m`
+  if (
+    distanceKm <
+    1
+  ) {
+    const meters =
+      Math.round(
+        distanceKm *
+          1000
+      )
+
+    if (
+      language ===
+      "arabic"
+    ) {
+      return `${meters} م`
+    }
+
+    return `${meters} m`
   }
 
-  return `${distanceKm.toFixed(1)} km`
+  const distance =
+    distanceKm.toFixed(
+      1
+    )
+
+  if (
+    language ===
+    "arabic"
+  ) {
+    return `${distance} كم`
+  }
+
+  return `${distance} km`
+}
+
+function getLocale(
+  language:
+    LanguagePreference
+) {
+  if (
+    language ===
+    "arabic"
+  ) {
+    return "ar-EG"
+  }
+
+  if (
+    language ===
+    "french"
+  ) {
+    return "fr-FR"
+  }
+
+  return "en-EG"
 }
 
 function formatDate(
-  value: string
+  value: string,
+  language:
+    LanguagePreference
 ) {
   return new Intl.DateTimeFormat(
-    "en-EG",
+    getLocale(
+      language
+    ),
     {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+      day:
+        "numeric",
+      month:
+        "short",
+      year:
+        "numeric",
     }
-  ).format(new Date(value))
+  ).format(
+    new Date(
+      value
+    )
+  )
 }
 
 function formatTime(
-  value: string
+  value: string,
+  language:
+    LanguagePreference
 ) {
   return new Intl.DateTimeFormat(
-    "en-EG",
+    getLocale(
+      language
+    ),
     {
-      hour: "numeric",
-      minute: "2-digit",
+      hour:
+        "numeric",
+      minute:
+        "2-digit",
     }
-  ).format(new Date(value))
+  ).format(
+    new Date(
+      value
+    )
+  )
 }

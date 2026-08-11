@@ -21,6 +21,10 @@ import {
 
 import { createClient } from "@/lib/supabase/client"
 
+import {
+  useAppPreferences,
+} from "@/components/app-preferences-provider"
+
 import { Button } from "@/components/ui/button"
 
 import {
@@ -51,32 +55,393 @@ type ProfileResponse = {
   error?: string
 }
 
+const profileCopy = {
+  english: {
+    loginMissing:
+      "Your login session could not be found. Please log in again.",
+
+    loadFailed:
+      "Failed to load profile.",
+
+    saveFailed:
+      "Failed to save profile.",
+
+    savedSuccessfully:
+      "Profile saved successfully.",
+
+    selectImage:
+      "Please select an image file.",
+
+    imageTooLarge:
+      "Profile picture must be smaller than 5 MB.",
+
+    imageUrlFailed:
+      "Unable to get profile picture URL.",
+
+    imageSaveFailed:
+      "Failed to save profile picture.",
+
+    imageUploadFailed:
+      "Failed to upload profile picture.",
+
+    imageUpdated:
+      "Profile picture updated successfully.",
+
+    loadingProfile:
+      "Loading your profile...",
+
+    account:
+      "Account",
+
+    profile:
+      "Profile",
+
+    pageDescription:
+      "Manage your personal and emergency contact information.",
+
+    profileAlt:
+      "Profile",
+
+    changePicture:
+      "Change profile picture",
+
+    passengerProfile:
+      "Passenger profile",
+
+    cairoRoutePassenger:
+      "CairoRoute passenger",
+
+    uploadingPicture:
+      "Uploading profile picture...",
+
+    privateInformation:
+      "Private information",
+
+    privateDescription:
+      "Your contact information is only used for bookings and trip communication.",
+
+    personalInformation:
+      "Personal information",
+
+    personalDescription:
+      "Update the information associated with your CairoRoute account.",
+
+    fullName:
+      "Full name",
+
+    fullNamePlaceholder:
+      "Enter your full name",
+
+    emailAddress:
+      "Email address",
+
+    emailManaged:
+      "Email is managed by your login account.",
+
+    phoneNumber:
+      "Phone number",
+
+    emergencyContact:
+      "Emergency contact",
+
+    emergencyDescription:
+      "This person may be contacted if an urgent issue occurs during a trip.",
+
+    contactName:
+      "Contact name",
+
+    contactNamePlaceholder:
+      "Emergency contact name",
+
+    emergencyPhone:
+      "Emergency phone number",
+
+    saving:
+      "Saving...",
+
+    saveChanges:
+      "Save changes",
+  },
+
+  arabic: {
+    loginMissing:
+      "تعذر العثور على جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.",
+
+    loadFailed:
+      "تعذر تحميل الملف الشخصي.",
+
+    saveFailed:
+      "تعذر حفظ الملف الشخصي.",
+
+    savedSuccessfully:
+      "تم حفظ الملف الشخصي بنجاح.",
+
+    selectImage:
+      "يرجى اختيار ملف صورة.",
+
+    imageTooLarge:
+      "يجب أن يكون حجم صورة الملف الشخصي أقل من 5 ميجابايت.",
+
+    imageUrlFailed:
+      "تعذر الحصول على رابط صورة الملف الشخصي.",
+
+    imageSaveFailed:
+      "تعذر حفظ صورة الملف الشخصي.",
+
+    imageUploadFailed:
+      "تعذر رفع صورة الملف الشخصي.",
+
+    imageUpdated:
+      "تم تحديث صورة الملف الشخصي بنجاح.",
+
+    loadingProfile:
+      "جارٍ تحميل ملفك الشخصي...",
+
+    account:
+      "الحساب",
+
+    profile:
+      "الملف الشخصي",
+
+    pageDescription:
+      "إدارة معلوماتك الشخصية وبيانات الاتصال في حالات الطوارئ.",
+
+    profileAlt:
+      "الملف الشخصي",
+
+    changePicture:
+      "تغيير صورة الملف الشخصي",
+
+    passengerProfile:
+      "ملف الراكب",
+
+    cairoRoutePassenger:
+      "راكب CairoRoute",
+
+    uploadingPicture:
+      "جارٍ رفع صورة الملف الشخصي...",
+
+    privateInformation:
+      "معلومات خاصة",
+
+    privateDescription:
+      "يتم استخدام معلومات الاتصال الخاصة بك فقط للحجوزات والتواصل المتعلق بالرحلات.",
+
+    personalInformation:
+      "المعلومات الشخصية",
+
+    personalDescription:
+      "حدّث المعلومات المرتبطة بحسابك على CairoRoute.",
+
+    fullName:
+      "الاسم الكامل",
+
+    fullNamePlaceholder:
+      "أدخل الاسم الكامل",
+
+    emailAddress:
+      "البريد الإلكتروني",
+
+    emailManaged:
+      "يتم إدارة البريد الإلكتروني من خلال حساب تسجيل الدخول.",
+
+    phoneNumber:
+      "رقم الهاتف",
+
+    emergencyContact:
+      "جهة اتصال للطوارئ",
+
+    emergencyDescription:
+      "قد يتم التواصل مع هذا الشخص إذا حدث أمر طارئ أثناء الرحلة.",
+
+    contactName:
+      "اسم جهة الاتصال",
+
+    contactNamePlaceholder:
+      "اسم جهة اتصال الطوارئ",
+
+    emergencyPhone:
+      "رقم هاتف الطوارئ",
+
+    saving:
+      "جارٍ الحفظ...",
+
+    saveChanges:
+      "حفظ التغييرات",
+  },
+
+  french: {
+    loginMissing:
+      "Votre session de connexion est introuvable. Veuillez vous reconnecter.",
+
+    loadFailed:
+      "Impossible de charger le profil.",
+
+    saveFailed:
+      "Impossible d’enregistrer le profil.",
+
+    savedSuccessfully:
+      "Profil enregistré avec succès.",
+
+    selectImage:
+      "Veuillez sélectionner un fichier image.",
+
+    imageTooLarge:
+      "La photo de profil doit faire moins de 5 Mo.",
+
+    imageUrlFailed:
+      "Impossible d’obtenir l’URL de la photo de profil.",
+
+    imageSaveFailed:
+      "Impossible d’enregistrer la photo de profil.",
+
+    imageUploadFailed:
+      "Impossible d’importer la photo de profil.",
+
+    imageUpdated:
+      "Photo de profil mise à jour avec succès.",
+
+    loadingProfile:
+      "Chargement de votre profil...",
+
+    account:
+      "Compte",
+
+    profile:
+      "Profil",
+
+    pageDescription:
+      "Gérez vos informations personnelles et votre contact d’urgence.",
+
+    profileAlt:
+      "Profil",
+
+    changePicture:
+      "Modifier la photo de profil",
+
+    passengerProfile:
+      "Profil passager",
+
+    cairoRoutePassenger:
+      "Passager CairoRoute",
+
+    uploadingPicture:
+      "Importation de la photo de profil...",
+
+    privateInformation:
+      "Informations privées",
+
+    privateDescription:
+      "Vos coordonnées sont uniquement utilisées pour les réservations et les communications liées aux trajets.",
+
+    personalInformation:
+      "Informations personnelles",
+
+    personalDescription:
+      "Mettez à jour les informations associées à votre compte CairoRoute.",
+
+    fullName:
+      "Nom complet",
+
+    fullNamePlaceholder:
+      "Entrez votre nom complet",
+
+    emailAddress:
+      "Adresse e-mail",
+
+    emailManaged:
+      "L’adresse e-mail est gérée par votre compte de connexion.",
+
+    phoneNumber:
+      "Numéro de téléphone",
+
+    emergencyContact:
+      "Contact d’urgence",
+
+    emergencyDescription:
+      "Cette personne peut être contactée en cas de problème urgent pendant un trajet.",
+
+    contactName:
+      "Nom du contact",
+
+    contactNamePlaceholder:
+      "Nom du contact d’urgence",
+
+    emergencyPhone:
+      "Numéro de téléphone d’urgence",
+
+    saving:
+      "Enregistrement...",
+
+    saveChanges:
+      "Enregistrer les modifications",
+  },
+} as const
+
 export default function ProfilePage() {
+  const {
+    language,
+  } =
+    useAppPreferences()
+
+  const copy =
+    profileCopy[
+      language
+    ]
+
   const fileInputRef =
-    useRef<HTMLInputElement | null>(null)
+    useRef<HTMLInputElement | null>(
+      null
+    )
 
-  const [fullName, setFullName] =
+  const [
+    fullName,
+    setFullName,
+  ] =
     useState("")
 
-  const [email, setEmail] =
+  const [
+    email,
+    setEmail,
+  ] =
     useState("")
 
-  const [phoneNumber, setPhoneNumber] =
+  const [
+    phoneNumber,
+    setPhoneNumber,
+  ] =
     useState("")
 
-  const [emergencyName, setEmergencyName] =
+  const [
+    emergencyName,
+    setEmergencyName,
+  ] =
     useState("")
 
-  const [emergencyPhone, setEmergencyPhone] =
+  const [
+    emergencyPhone,
+    setEmergencyPhone,
+  ] =
     useState("")
 
-  const [avatarUrl, setAvatarUrl] =
-    useState<string | null>(null)
+  const [
+    avatarUrl,
+    setAvatarUrl,
+  ] =
+    useState<string | null>(
+      null
+    )
 
-  const [loading, setLoading] =
+  const [
+    loading,
+    setLoading,
+  ] =
     useState(true)
 
-  const [saving, setSaving] =
+  const [
+    saving,
+    setSaving,
+  ] =
     useState(false)
 
   const [
@@ -85,10 +450,16 @@ export default function ProfilePage() {
   ] =
     useState(false)
 
-  const [message, setMessage] =
+  const [
+    message,
+    setMessage,
+  ] =
     useState("")
 
-  const [isError, setIsError] =
+  const [
+    isError,
+    setIsError,
+  ] =
     useState(false)
 
   /*
@@ -100,16 +471,27 @@ export default function ProfilePage() {
   useEffect(() => {
     async function loadProfile() {
       try {
-        setLoading(true)
-        setMessage("")
-        setIsError(false)
+        setLoading(
+          true
+        )
+
+        setMessage(
+          ""
+        )
+
+        setIsError(
+          false
+        )
 
         const supabase =
           createClient()
 
         const {
-          data: { session },
-          error: sessionError,
+          data: {
+            session,
+          },
+          error:
+            sessionError,
         } =
           await supabase.auth.getSession()
 
@@ -118,7 +500,7 @@ export default function ProfilePage() {
           !session
         ) {
           throw new Error(
-            "Your login session could not be found. Please log in again."
+            copy.loginMissing
           )
         }
 
@@ -126,31 +508,36 @@ export default function ProfilePage() {
           await fetch(
             "/api/profile",
             {
-              method: "GET",
+              method:
+                "GET",
 
               headers: {
                 Authorization:
                   `Bearer ${session.access_token}`,
               },
 
-              cache: "no-store",
+              cache:
+                "no-store",
             }
           )
 
         const result =
           (await response.json()) as ProfileResponse
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
             result.error
               ? `${result.message} ${result.error}`
               : result.message ||
-                  "Failed to load profile."
+                  copy.loadFailed
           )
         }
 
         setEmail(
-          result.email ?? ""
+          result.email ??
+            ""
         )
 
         if (
@@ -158,22 +545,26 @@ export default function ProfilePage() {
         ) {
           setFullName(
             result.profile
-              .full_name ?? ""
+              .full_name ??
+              ""
           )
 
           setPhoneNumber(
             result.profile
-              .phone ?? ""
+              .phone ??
+              ""
           )
 
           setEmergencyName(
             result.profile
-              .emergency_name ?? ""
+              .emergency_name ??
+              ""
           )
 
           setEmergencyPhone(
             result.profile
-              .emergency_phone ?? ""
+              .emergency_phone ??
+              ""
           )
 
           setAvatarUrl(
@@ -181,21 +572,30 @@ export default function ProfilePage() {
               .avatar_url
           )
         }
-      } catch (error) {
-        setIsError(true)
+      } catch (
+        error
+      ) {
+        setIsError(
+          true
+        )
 
         setMessage(
           error instanceof Error
             ? error.message
-            : "Failed to load profile."
+            : copy.loadFailed
         )
       } finally {
-        setLoading(false)
+        setLoading(
+          false
+        )
       }
     }
 
     loadProfile()
-  }, [])
+  }, [
+    copy.loadFailed,
+    copy.loginMissing,
+  ])
 
   /*
    * ---------------------------------------
@@ -204,21 +604,33 @@ export default function ProfilePage() {
    */
 
   async function saveProfile(
-    event: React.FormEvent<HTMLFormElement>
+    event:
+      React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault()
 
     try {
-      setSaving(true)
-      setMessage("")
-      setIsError(false)
+      setSaving(
+        true
+      )
+
+      setMessage(
+        ""
+      )
+
+      setIsError(
+        false
+      )
 
       const supabase =
         createClient()
 
       const {
-        data: { session },
-        error: sessionError,
+        data: {
+          session,
+        },
+        error:
+          sessionError,
       } =
         await supabase.auth.getSession()
 
@@ -227,7 +639,7 @@ export default function ProfilePage() {
         !session
       ) {
         throw new Error(
-          "Your login session could not be found. Please log in again."
+          copy.loginMissing
         )
       }
 
@@ -235,7 +647,8 @@ export default function ProfilePage() {
         await fetch(
           "/api/profile",
           {
-            method: "PUT",
+            method:
+              "PUT",
 
             headers: {
               "Content-Type":
@@ -245,33 +658,38 @@ export default function ProfilePage() {
                 `Bearer ${session.access_token}`,
             },
 
-            body: JSON.stringify({
-              fullName:
-                fullName.trim(),
+            body:
+              JSON.stringify(
+                {
+                  fullName:
+                    fullName.trim(),
 
-              phone:
-                phoneNumber.trim(),
+                  phone:
+                    phoneNumber.trim(),
 
-              emergencyName:
-                emergencyName.trim(),
+                  emergencyName:
+                    emergencyName.trim(),
 
-              emergencyPhone:
-                emergencyPhone.trim(),
+                  emergencyPhone:
+                    emergencyPhone.trim(),
 
-              avatarUrl,
-            }),
+                  avatarUrl,
+                }
+              ),
           }
         )
 
       const result =
         (await response.json()) as ProfileResponse
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           result.error
             ? `${result.message} ${result.error}`
             : result.message ||
-                "Failed to save profile."
+                copy.saveFailed
         )
       }
 
@@ -280,22 +698,26 @@ export default function ProfilePage() {
       ) {
         setFullName(
           result.profile
-            .full_name ?? ""
+            .full_name ??
+            ""
         )
 
         setPhoneNumber(
           result.profile
-            .phone ?? ""
+            .phone ??
+            ""
         )
 
         setEmergencyName(
           result.profile
-            .emergency_name ?? ""
+            .emergency_name ??
+            ""
         )
 
         setEmergencyPhone(
           result.profile
-            .emergency_phone ?? ""
+            .emergency_phone ??
+            ""
         )
 
         setAvatarUrl(
@@ -305,20 +727,28 @@ export default function ProfilePage() {
       }
 
       setMessage(
-        "Profile saved successfully."
+        copy.savedSuccessfully
       )
 
-      setIsError(false)
-    } catch (error) {
-      setIsError(true)
+      setIsError(
+        false
+      )
+    } catch (
+      error
+    ) {
+      setIsError(
+        true
+      )
 
       setMessage(
         error instanceof Error
           ? error.message
-          : "Failed to save profile."
+          : copy.saveFailed
       )
     } finally {
-      setSaving(false)
+      setSaving(
+        false
+      )
     }
   }
 
@@ -329,37 +759,52 @@ export default function ProfilePage() {
    */
 
   async function uploadProfilePicture(
-    event: React.ChangeEvent<HTMLInputElement>
+    event:
+      React.ChangeEvent<HTMLInputElement>
   ) {
     const file =
       event.target.files?.[0]
 
-    if (!file) {
+    if (
+      !file
+    ) {
       return
     }
 
     try {
-      setUploadingAvatar(true)
-      setMessage("")
-      setIsError(false)
+      setUploadingAvatar(
+        true
+      )
+
+      setMessage(
+        ""
+      )
+
+      setIsError(
+        false
+      )
 
       if (
-        !file.type.startsWith("image/")
+        !file.type.startsWith(
+          "image/"
+        )
       ) {
         throw new Error(
-          "Please select an image file."
+          copy.selectImage
         )
       }
 
       const maxFileSize =
-        5 * 1024 * 1024
+        5 *
+        1024 *
+        1024
 
       if (
         file.size >
         maxFileSize
       ) {
         throw new Error(
-          "Profile picture must be smaller than 5 MB."
+          copy.imageTooLarge
         )
       }
 
@@ -367,8 +812,11 @@ export default function ProfilePage() {
         createClient()
 
       const {
-        data: { session },
-        error: sessionError,
+        data: {
+          session,
+        },
+        error:
+          sessionError,
       } =
         await supabase.auth.getSession()
 
@@ -377,13 +825,15 @@ export default function ProfilePage() {
         !session
       ) {
         throw new Error(
-          "Your login session could not be found. Please log in again."
+          copy.loginMissing
         )
       }
 
       const extension =
         file.name
-          .split(".")
+          .split(
+            "."
+          )
           .pop()
           ?.toLowerCase() ||
         "jpg"
@@ -394,23 +844,30 @@ export default function ProfilePage() {
       /*
        * Upload actual image to Supabase Storage.
        */
+
       const {
-        error: uploadError,
+        error:
+          uploadError,
       } =
         await supabase.storage
-          .from("avatars")
+          .from(
+            "avatars"
+          )
           .upload(
             filePath,
             file,
             {
-              upsert: true,
+              upsert:
+                true,
 
               contentType:
                 file.type,
             }
           )
 
-      if (uploadError) {
+      if (
+        uploadError
+      ) {
         throw new Error(
           uploadError.message
         )
@@ -419,12 +876,15 @@ export default function ProfilePage() {
       /*
        * Get public URL.
        */
+
       const {
         data:
           publicUrlData,
       } =
         supabase.storage
-          .from("avatars")
+          .from(
+            "avatars"
+          )
           .getPublicUrl(
             filePath
           )
@@ -432,21 +892,24 @@ export default function ProfilePage() {
       const newAvatarUrl =
         publicUrlData.publicUrl
 
-      if (!newAvatarUrl) {
+      if (
+        !newAvatarUrl
+      ) {
         throw new Error(
-          "Unable to get profile picture URL."
+          copy.imageUrlFailed
         )
       }
 
       /*
-       * Save avatar URL in public.profiles
-       * through our API route.
+       * Save avatar URL through API.
        */
+
       const response =
         await fetch(
           "/api/profile",
           {
-            method: "PUT",
+            method:
+              "PUT",
 
             headers: {
               "Content-Type":
@@ -456,34 +919,39 @@ export default function ProfilePage() {
                 `Bearer ${session.access_token}`,
             },
 
-            body: JSON.stringify({
-              fullName:
-                fullName.trim(),
+            body:
+              JSON.stringify(
+                {
+                  fullName:
+                    fullName.trim(),
 
-              phone:
-                phoneNumber.trim(),
+                  phone:
+                    phoneNumber.trim(),
 
-              emergencyName:
-                emergencyName.trim(),
+                  emergencyName:
+                    emergencyName.trim(),
 
-              emergencyPhone:
-                emergencyPhone.trim(),
+                  emergencyPhone:
+                    emergencyPhone.trim(),
 
-              avatarUrl:
-                newAvatarUrl,
-            }),
+                  avatarUrl:
+                    newAvatarUrl,
+                }
+              ),
           }
         )
 
       const result =
         (await response.json()) as ProfileResponse
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         throw new Error(
           result.error
             ? `${result.message} ${result.error}`
             : result.message ||
-                "Failed to save profile picture."
+                copy.imageSaveFailed
         )
       }
 
@@ -492,20 +960,28 @@ export default function ProfilePage() {
       )
 
       setMessage(
-        "Profile picture updated successfully."
+        copy.imageUpdated
       )
 
-      setIsError(false)
-    } catch (error) {
-      setIsError(true)
+      setIsError(
+        false
+      )
+    } catch (
+      error
+    ) {
+      setIsError(
+        true
+      )
 
       setMessage(
         error instanceof Error
           ? error.message
-          : "Failed to upload profile picture."
+          : copy.imageUploadFailed
       )
     } finally {
-      setUploadingAvatar(false)
+      setUploadingAvatar(
+        false
+      )
 
       if (
         fileInputRef.current
@@ -522,11 +998,15 @@ export default function ProfilePage() {
    * ---------------------------------------
    */
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <div className="mx-auto flex min-h-80 w-full max-w-6xl items-center justify-center">
         <p className="text-sm text-slate-500">
-          Loading your profile...
+          {
+            copy.loadingProfile
+          }
         </p>
       </div>
     )
@@ -536,15 +1016,21 @@ export default function ProfilePage() {
     <div className="mx-auto w-full max-w-6xl space-y-6">
       <section>
         <p className="text-sm font-medium text-[#512978]">
-          Account
+          {
+            copy.account
+          }
         </p>
 
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
-          Profile
+          {
+            copy.profile
+          }
         </h1>
 
         <p className="mt-2 text-slate-600">
-          Manage your personal and emergency contact information.
+          {
+            copy.pageDescription
+          }
         </p>
       </section>
 
@@ -559,9 +1045,15 @@ export default function ProfilePage() {
                   src={
                     avatarUrl
                   }
-                  alt="Profile"
-                  width={112}
-                  height={112}
+                  alt={
+                    copy.profileAlt
+                  }
+                  width={
+                    112
+                  }
+                  height={
+                    112
+                  }
                   unoptimized
                   className="size-28 rounded-full object-cover"
                 />
@@ -592,8 +1084,12 @@ export default function ProfilePage() {
                   uploadingAvatar
                 }
                 className="absolute bottom-0 right-0 flex size-9 items-center justify-center rounded-full border-4 border-white bg-slate-900 text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="Change profile picture"
-                title="Change profile picture"
+                aria-label={
+                  copy.changePicture
+                }
+                title={
+                  copy.changePicture
+                }
               >
                 <Camera className="size-4" />
               </button>
@@ -601,17 +1097,19 @@ export default function ProfilePage() {
 
             <h2 className="mt-5 text-lg font-semibold text-slate-900">
               {fullName ||
-                "Passenger profile"}
+                copy.passengerProfile}
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
               {email ||
-                "CairoRoute passenger"}
+                copy.cairoRoutePassenger}
             </p>
 
             {uploadingAvatar && (
               <p className="mt-3 text-xs font-medium text-[#512978]">
-                Uploading profile picture...
+                {
+                  copy.uploadingPicture
+                }
               </p>
             )}
 
@@ -621,11 +1119,15 @@ export default function ProfilePage() {
 
                 <div>
                   <p className="text-sm font-medium text-slate-900">
-                    Private information
+                    {
+                      copy.privateInformation
+                    }
                   </p>
 
                   <p className="mt-1 text-xs leading-5 text-slate-600">
-                    Your contact information is only used for bookings and trip communication.
+                    {
+                      copy.privateDescription
+                    }
                   </p>
                 </div>
               </div>
@@ -644,11 +1146,15 @@ export default function ProfilePage() {
           <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100">
               <CardTitle className="text-xl text-slate-900">
-                Personal information
+                {
+                  copy.personalInformation
+                }
               </CardTitle>
 
               <CardDescription>
-                Update the information associated with your CairoRoute account.
+                {
+                  copy.personalDescription
+                }
               </CardDescription>
             </CardHeader>
 
@@ -657,7 +1163,9 @@ export default function ProfilePage() {
 
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="full-name">
-                  Full name
+                  {
+                    copy.fullName
+                  }
                 </Label>
 
                 <div className="relative">
@@ -679,7 +1187,9 @@ export default function ProfilePage() {
                         ""
                       )
                     }}
-                    placeholder="Enter your full name"
+                    placeholder={
+                      copy.fullNamePlaceholder
+                    }
                     disabled={
                       saving ||
                       uploadingAvatar
@@ -693,7 +1203,9 @@ export default function ProfilePage() {
 
               <div className="space-y-2">
                 <Label htmlFor="email">
-                  Email address
+                  {
+                    copy.emailAddress
+                  }
                 </Label>
 
                 <div className="relative">
@@ -712,7 +1224,9 @@ export default function ProfilePage() {
                 </div>
 
                 <p className="text-xs text-slate-500">
-                  Email is managed by your login account.
+                  {
+                    copy.emailManaged
+                  }
                 </p>
               </div>
 
@@ -720,7 +1234,9 @@ export default function ProfilePage() {
 
               <div className="space-y-2">
                 <Label htmlFor="phone">
-                  Phone number
+                  {
+                    copy.phoneNumber
+                  }
                 </Label>
 
                 <div className="relative">
@@ -760,18 +1276,24 @@ export default function ProfilePage() {
           <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100">
               <CardTitle className="text-xl text-slate-900">
-                Emergency contact
+                {
+                  copy.emergencyContact
+                }
               </CardTitle>
 
               <CardDescription>
-                This person may be contacted if an urgent issue occurs during a trip.
+                {
+                  copy.emergencyDescription
+                }
               </CardDescription>
             </CardHeader>
 
             <CardContent className="grid gap-5 pt-6 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="emergency-name">
-                  Contact name
+                  {
+                    copy.contactName
+                  }
                 </Label>
 
                 <div className="relative">
@@ -793,7 +1315,9 @@ export default function ProfilePage() {
                         ""
                       )
                     }}
-                    placeholder="Emergency contact name"
+                    placeholder={
+                      copy.contactNamePlaceholder
+                    }
                     disabled={
                       saving ||
                       uploadingAvatar
@@ -805,7 +1329,9 @@ export default function ProfilePage() {
 
               <div className="space-y-2">
                 <Label htmlFor="emergency-phone">
-                  Emergency phone number
+                  {
+                    copy.emergencyPhone
+                  }
                 </Label>
 
                 <div className="relative">
@@ -858,7 +1384,9 @@ export default function ProfilePage() {
                     <CheckCircle2 className="size-4" />
                   )}
 
-                  {message}
+                  {
+                    message
+                  }
                 </p>
               )}
             </div>
@@ -874,8 +1402,8 @@ export default function ProfilePage() {
               <Save className="size-4" />
 
               {saving
-                ? "Saving..."
-                : "Save changes"}
+                ? copy.saving
+                : copy.saveChanges}
             </Button>
           </div>
         </form>

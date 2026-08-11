@@ -1,35 +1,25 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import {
+  usePathname,
+  useRouter,
+} from "next/navigation"
 import {
   CalendarDays,
   House,
   LogOut,
+  Settings,
   UserRound,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import {
+  useEffect,
+  useState,
+} from "react"
 
 import CairoRouteLogo from "@/components/cairoroute-logo"
+import { useAppPreferences } from "@/components/app-preferences-provider"
 import { createClient } from "@/lib/supabase/client"
-
-const navigationItems = [
-  {
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: House,
-  },
-  {
-    label: "My Bookings",
-    href: "/dashboard/bookings",
-    icon: CalendarDays,
-  },
-  {
-    label: "Profile",
-    href: "/dashboard/profile",
-    icon: UserRound,
-  },
-]
 
 type AppSidebarProps = {
   onNavigate?: () => void
@@ -40,12 +30,60 @@ export default function AppSidebar({
   onNavigate,
   className = "",
 }: AppSidebarProps) {
-  const pathname = usePathname()
-  const router = useRouter()
+  const pathname =
+    usePathname()
 
-  const [loggingOut, setLoggingOut] = useState(false)
-  const [userName, setUserName] = useState("")
-  const [loadingUser, setLoadingUser] = useState(true)
+  const router =
+    useRouter()
+
+  const { t } =
+    useAppPreferences()
+
+  const [
+    loggingOut,
+    setLoggingOut,
+  ] = useState(false)
+
+  const [
+    userName,
+    setUserName,
+  ] = useState("")
+
+  const [
+    loadingUser,
+    setLoadingUser,
+  ] = useState(true)
+
+  const navigationItems = [
+    {
+      label: t(
+        "dashboard"
+      ),
+      href: "/dashboard",
+      icon: House,
+    },
+    {
+      label: t(
+        "myBookings"
+      ),
+      href: "/dashboard/bookings",
+      icon: CalendarDays,
+    },
+    {
+      label: t(
+        "profile"
+      ),
+      href: "/dashboard/profile",
+      icon: UserRound,
+    },
+    {
+      label: t(
+        "settings"
+      ),
+      href: "/dashboard/settings",
+      icon: Settings,
+    },
+  ]
 
   /*
    * =========================================
@@ -56,56 +94,85 @@ export default function AppSidebar({
   useEffect(() => {
     async function loadUser() {
       try {
-        const supabase = createClient()
+        const supabase =
+          createClient()
 
         const {
-          data: { session },
-        } = await supabase.auth.getSession()
+          data: {
+            session,
+          },
+        } =
+          await supabase.auth.getSession()
 
         if (!session) {
-          setUserName("User")
+          setUserName(
+            "User"
+          )
+
           return
         }
 
-        const response = await fetch("/api/profile", {
-          method: "GET",
+        const response =
+          await fetch(
+            "/api/profile",
+            {
+              method:
+                "GET",
 
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+              headers: {
+                Authorization:
+                  `Bearer ${session.access_token}`,
+              },
 
-          cache: "no-store",
-        })
+              cache:
+                "no-store",
+            }
+          )
 
-        const result = await response.json()
+        const result =
+          await response.json()
 
         if (
           response.ok &&
-          result.profile?.full_name
+          result.profile
+            ?.full_name
         ) {
           setUserName(
-            result.profile.full_name
+            result.profile
+              .full_name
           )
         } else if (
-          session.user.user_metadata?.full_name
+          session.user
+            .user_metadata
+            ?.full_name
         ) {
           setUserName(
-            session.user.user_metadata.full_name
+            session.user
+              .user_metadata
+              .full_name
           )
         } else {
           setUserName(
-            session.user.email ?? "User"
+            session.user
+              .email ??
+              "User"
           )
         }
-      } catch (error) {
+      } catch (
+        error
+      ) {
         console.error(
           "Failed to load sidebar user:",
           error
         )
 
-        setUserName("User")
+        setUserName(
+          "User"
+        )
       } finally {
-        setLoadingUser(false)
+        setLoadingUser(
+          false
+        )
       }
     }
 
@@ -119,31 +186,47 @@ export default function AppSidebar({
    */
 
   async function handleLogout() {
-    if (loggingOut) {
+    if (
+      loggingOut
+    ) {
       return
     }
 
     try {
-      setLoggingOut(true)
+      setLoggingOut(
+        true
+      )
 
-      const supabase = createClient()
+      const supabase =
+        createClient()
 
-      const { error } =
+      const {
+        error,
+      } =
         await supabase.auth.signOut()
 
-      if (error) {
+      if (
+        error
+      ) {
         throw error
       }
 
-      router.replace("/login")
+      router.replace(
+        "/login"
+      )
+
       router.refresh()
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Logout failed:",
         error
       )
 
-      setLoggingOut(false)
+      setLoggingOut(
+        false
+      )
     }
   }
 
@@ -157,10 +240,12 @@ export default function AppSidebar({
     href: string
   ) {
     if (
-      href === "/dashboard"
+      href ===
+      "/dashboard"
     ) {
       return (
-        pathname === "/dashboard"
+        pathname ===
+        "/dashboard"
       )
     }
 
@@ -192,12 +277,16 @@ export default function AppSidebar({
 
         <div>
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-            Your journey
+            {t(
+              "yourJourney"
+            )}
           </p>
 
           <nav className="space-y-1.5">
             {navigationItems.map(
-              (item) => {
+              (
+                item
+              ) => {
                 const Icon =
                   item.icon
 
@@ -238,7 +327,9 @@ export default function AppSidebar({
                     </span>
 
                     <span>
-                      {item.label}
+                      {
+                        item.label
+                      }
                     </span>
                   </Link>
                 )
@@ -255,7 +346,9 @@ export default function AppSidebar({
 
         <div className="border-t border-[#ebe6ee] pt-4">
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-            Account
+            {t(
+              "account"
+            )}
           </p>
 
           <div className="rounded-[16px] border border-[#ebe6ee] bg-white p-3 shadow-[0_5px_18px_rgba(35,22,44,0.04)]">
@@ -266,12 +359,16 @@ export default function AppSidebar({
 
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                  Signed in as
+                  {t(
+                    "signedInAs"
+                  )}
                 </p>
 
                 <p className="mt-0.5 truncate text-sm font-bold text-[#241b2b]">
                   {loadingUser
-                    ? "Loading..."
+                    ? t(
+                        "loading"
+                      )
                     : userName}
                 </p>
               </div>
@@ -296,8 +393,12 @@ export default function AppSidebar({
 
             <span>
               {loggingOut
-                ? "Logging out..."
-                : "Log out"}
+                ? t(
+                    "loggingOut"
+                  )
+                : t(
+                    "logout"
+                  )}
             </span>
           </button>
         </div>

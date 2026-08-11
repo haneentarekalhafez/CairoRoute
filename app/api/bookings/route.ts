@@ -2,25 +2,48 @@ import { NextResponse } from "next/server"
 
 import { createClient } from "@/lib/supabase/server"
 
+type PaymentMethod =
+  | "card"
+  | "fawry"
+  | "cash"
+
 type CreateBookingBody = {
   tripId?: number
   seatNumbers?: number[]
   passengerName?: string
   passengerPhone?: string
   passengerEmail?: string | null
+
+  paymentMethod?: PaymentMethod
 }
 
 function createBookingReference() {
-  const timestamp = Date.now().toString()
+  const timestamp =
+    Date.now().toString()
 
-  const randomPart = Math.floor(
-    1000 + Math.random() * 9000
-  ).toString()
+  const randomPart =
+    Math.floor(
+      1000 +
+        Math.random() *
+          9000
+    ).toString()
 
   return `CR-${timestamp}-${randomPart}`
 }
 
-export async function POST(request: Request) {
+function isValidPaymentMethod(
+  value: unknown
+): value is PaymentMethod {
+  return (
+    value === "card" ||
+    value === "fawry" ||
+    value === "cash"
+  )
+}
+
+export async function POST(
+  request: Request
+) {
   try {
     /*
      * -------------------------------------------------
@@ -29,11 +52,15 @@ export async function POST(request: Request) {
      */
 
     const authorizationHeader =
-      request.headers.get("authorization")
+      request.headers.get(
+        "authorization"
+      )
 
     if (
       !authorizationHeader ||
-      !authorizationHeader.startsWith("Bearer ")
+      !authorizationHeader.startsWith(
+        "Bearer "
+      )
     ) {
       return NextResponse.json(
         {
@@ -47,9 +74,12 @@ export async function POST(request: Request) {
     }
 
     const accessToken =
-      authorizationHeader.slice("Bearer ".length)
+      authorizationHeader.slice(
+        "Bearer ".length
+      )
 
-    const supabase = await createClient()
+    const supabase =
+      await createClient()
 
     /*
      * -------------------------------------------------
@@ -58,16 +88,27 @@ export async function POST(request: Request) {
      */
 
     const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser(accessToken)
+      data: {
+        user,
+      },
+      error:
+        userError,
+    } =
+      await supabase.auth.getUser(
+        accessToken
+      )
 
-    if (userError || !user) {
+    if (
+      userError ||
+      !user
+    ) {
       return NextResponse.json(
         {
           message:
             "Your login session is invalid or expired.",
-          error: userError?.message,
+
+          error:
+            userError?.message,
         },
         {
           status: 401,
@@ -84,29 +125,51 @@ export async function POST(request: Request) {
     const body =
       (await request.json()) as CreateBookingBody
 
-    const tripId = Number(body.tripId)
+    const tripId =
+      Number(
+        body.tripId
+      )
 
     const seatNumbers =
-      body.seatNumbers ?? []
+      body.seatNumbers ??
+      []
 
     const passengerName =
-      body.passengerName?.trim() || ""
+      body.passengerName?.trim() ||
+      ""
 
     const passengerPhone =
-      body.passengerPhone?.trim() || ""
+      body.passengerPhone?.trim() ||
+      ""
 
     const passengerEmail =
-      body.passengerEmail?.trim() || null
+      body.passengerEmail?.trim() ||
+      null
+
+    /*
+     * For now, cash is the default.
+     *
+     * This means the booking page that already exists
+     * continues to work even before we add the payment
+     * method selector to the frontend.
+     */
+    const paymentMethod:
+      PaymentMethod =
+      body.paymentMethod ??
+      "cash"
 
     /*
      * -------------------------------------------------
-     * 4. VALIDATE PASSENGER/TRIP DATA
+     * 4. VALIDATE PASSENGER / TRIP / PAYMENT DATA
      * -------------------------------------------------
      */
 
     if (
-      !Number.isInteger(tripId) ||
-      tripId <= 0
+      !Number.isInteger(
+        tripId
+      ) ||
+      tripId <=
+        0
     ) {
       return NextResponse.json(
         {
@@ -119,7 +182,9 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!passengerName) {
+    if (
+      !passengerName
+    ) {
       return NextResponse.json(
         {
           message:
@@ -131,7 +196,9 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!passengerPhone) {
+    if (
+      !passengerPhone
+    ) {
       return NextResponse.json(
         {
           message:
@@ -143,21 +210,51 @@ export async function POST(request: Request) {
       )
     }
 
-    const cleanedSeatNumbers = [
-      ...new Set(
-        seatNumbers
-          .map((seatNumber) =>
-            Number(seatNumber)
-          )
-          .filter(
-            (seatNumber) =>
-              Number.isInteger(seatNumber) &&
-              seatNumber > 0
-          )
-      ),
-    ]
+    if (
+      !isValidPaymentMethod(
+        paymentMethod
+      )
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            "A valid payment method is required.",
+        },
+        {
+          status: 400,
+        }
+      )
+    }
 
-    if (cleanedSeatNumbers.length === 0) {
+    const cleanedSeatNumbers =
+      [
+        ...new Set(
+          seatNumbers
+            .map(
+              (
+                seatNumber
+              ) =>
+                Number(
+                  seatNumber
+                )
+            )
+            .filter(
+              (
+                seatNumber
+              ) =>
+                Number.isInteger(
+                  seatNumber
+                ) &&
+                seatNumber >
+                  0
+            )
+        ),
+      ]
+
+    if (
+      cleanedSeatNumbers.length ===
+      0
+    ) {
       return NextResponse.json(
         {
           message:
@@ -176,30 +273,43 @@ export async function POST(request: Request) {
      */
 
     const {
-      data: trip,
-      error: tripError,
-    } = await supabase
-      .from("trips")
-      .select(`
-        id,
-        price,
-        status,
-        departure_time,
-
-        bus:buses (
-          id,
-          capacity
+      data:
+        trip,
+      error:
+        tripError,
+    } =
+      await supabase
+        .from(
+          "trips"
         )
-      `)
-      .eq("id", tripId)
-      .single()
+        .select(`
+          id,
+          price,
+          status,
+          departure_time,
 
-    if (tripError || !trip) {
+          bus:buses (
+            id,
+            capacity
+          )
+        `)
+        .eq(
+          "id",
+          tripId
+        )
+        .single()
+
+    if (
+      tripError ||
+      !trip
+    ) {
       return NextResponse.json(
         {
           message:
             "The selected trip was not found.",
-          error: tripError?.message,
+
+          error:
+            tripError?.message,
         },
         {
           status: 404,
@@ -207,7 +317,10 @@ export async function POST(request: Request) {
       )
     }
 
-    if (trip.status !== "scheduled") {
+    if (
+      trip.status !==
+      "scheduled"
+    ) {
       return NextResponse.json(
         {
           message:
@@ -231,8 +344,11 @@ export async function POST(request: Request) {
       ).getTime()
 
     if (
-      !Number.isFinite(departureTime) ||
-      departureTime <= Date.now()
+      !Number.isFinite(
+        departureTime
+      ) ||
+      departureTime <=
+        Date.now()
     ) {
       return NextResponse.json(
         {
@@ -251,11 +367,16 @@ export async function POST(request: Request) {
      * -------------------------------------------------
      */
 
-    const bus = Array.isArray(trip.bus)
-      ? trip.bus[0]
-      : trip.bus
+    const bus =
+      Array.isArray(
+        trip.bus
+      )
+        ? trip.bus[0]
+        : trip.bus
 
-    if (!bus) {
+    if (
+      !bus
+    ) {
       return NextResponse.json(
         {
           message:
@@ -268,11 +389,16 @@ export async function POST(request: Request) {
     }
 
     const busCapacity =
-      Number(bus.capacity)
+      Number(
+        bus.capacity
+      )
 
     if (
-      !Number.isInteger(busCapacity) ||
-      busCapacity <= 0
+      !Number.isInteger(
+        busCapacity
+      ) ||
+      busCapacity <=
+        0
     ) {
       return NextResponse.json(
         {
@@ -287,15 +413,23 @@ export async function POST(request: Request) {
 
     const invalidSeat =
       cleanedSeatNumbers.find(
-        (seatNumber) =>
-          seatNumber < 1 ||
-          seatNumber > busCapacity
+        (
+          seatNumber
+        ) =>
+          seatNumber <
+            1 ||
+          seatNumber >
+            busCapacity
       )
 
-    if (invalidSeat !== undefined) {
+    if (
+      invalidSeat !==
+      undefined
+    ) {
       return NextResponse.json(
         {
-          message: `Seat ${invalidSeat} does not exist on this bus.`,
+          message:
+            `Seat ${invalidSeat} does not exist on this bus.`,
         },
         {
           status: 400,
@@ -310,22 +444,35 @@ export async function POST(request: Request) {
      */
 
     const {
-      data: existingSeats,
-      error: existingSeatsError,
-    } = await supabase
-      .from("booking_seats")
-      .select("seat_number")
-      .eq("trip_id", tripId)
-      .in(
-        "seat_number",
-        cleanedSeatNumbers
-      )
+      data:
+        existingSeats,
+      error:
+        existingSeatsError,
+    } =
+      await supabase
+        .from(
+          "booking_seats"
+        )
+        .select(
+          "seat_number"
+        )
+        .eq(
+          "trip_id",
+          tripId
+        )
+        .in(
+          "seat_number",
+          cleanedSeatNumbers
+        )
 
-    if (existingSeatsError) {
+    if (
+      existingSeatsError
+    ) {
       return NextResponse.json(
         {
           message:
             "Failed to check seat availability.",
+
           error:
             existingSeatsError.message,
         },
@@ -337,7 +484,8 @@ export async function POST(request: Request) {
 
     if (
       existingSeats &&
-      existingSeats.length > 0
+      existingSeats.length >
+        0
     ) {
       return NextResponse.json(
         {
@@ -346,7 +494,9 @@ export async function POST(request: Request) {
 
           unavailableSeats:
             existingSeats.map(
-              (seat) =>
+              (
+                seat
+              ) =>
                 Number(
                   seat.seat_number
                 )
@@ -365,9 +515,15 @@ export async function POST(request: Request) {
      */
 
     const tripPrice =
-      Number(trip.price)
+      Number(
+        trip.price
+      )
 
-    if (!Number.isFinite(tripPrice)) {
+    if (
+      !Number.isFinite(
+        tripPrice
+      )
+    ) {
       return NextResponse.json(
         {
           message:
@@ -393,43 +549,71 @@ export async function POST(request: Request) {
       createBookingReference()
 
     const {
-      data: booking,
-      error: bookingError,
-    } = await supabase
-      .from("bookings")
-      .insert({
-        /*
-         * REAL authenticated user UUID.
-         */
-        user_id: user.id,
+      data:
+        booking,
+      error:
+        bookingError,
+    } =
+      await supabase
+        .from(
+          "bookings"
+        )
+        .insert({
+          /*
+           * REAL authenticated user UUID.
+           */
+          user_id:
+            user.id,
 
-        trip_id: tripId,
+          trip_id:
+            tripId,
 
-        booking_reference:
-          bookingReference,
+          booking_reference:
+            bookingReference,
 
-        status: "confirmed",
+          /*
+           * Booking status and payment status are
+           * deliberately separate concepts.
+           *
+           * Cash:
+           *   The booking is confirmed immediately.
+           *
+           * Card / Fawry:
+           *   The seat is reserved, but the booking
+           *   stays pending until payment succeeds.
+           */
+          status:
+            paymentMethod ===
+            "cash"
+              ? "confirmed"
+              : "pending_payment",
 
-        passenger_name:
-          passengerName,
+          passenger_name:
+            passengerName,
 
-        passenger_phone:
-          passengerPhone,
+          passenger_phone:
+            passengerPhone,
 
-        passenger_email:
-          passengerEmail,
+          passenger_email:
+            passengerEmail,
 
-        total_price:
-          totalPrice,
-      })
-      .select("*")
-      .single()
+          total_price:
+            totalPrice,
+        })
+        .select(
+          "*"
+        )
+        .single()
 
-    if (bookingError || !booking) {
+    if (
+      bookingError ||
+      !booking
+    ) {
       return NextResponse.json(
         {
           message:
             "Failed to create the booking.",
+
           error:
             bookingError?.message,
         },
@@ -447,7 +631,9 @@ export async function POST(request: Request) {
 
     const bookingSeatRows =
       cleanedSeatNumbers.map(
-        (seatNumber) => ({
+        (
+          seatNumber
+        ) => ({
           booking_id:
             booking.id,
 
@@ -460,20 +646,33 @@ export async function POST(request: Request) {
       )
 
     const {
-      data: createdSeats,
-      error: seatsInsertError,
-    } = await supabase
-      .from("booking_seats")
-      .insert(bookingSeatRows)
-      .select("*")
+      data:
+        createdSeats,
+      error:
+        seatsInsertError,
+    } =
+      await supabase
+        .from(
+          "booking_seats"
+        )
+        .insert(
+          bookingSeatRows
+        )
+        .select(
+          "*"
+        )
 
     /*
      * If the seat insert fails,
      * remove the booking we just created.
      */
-    if (seatsInsertError) {
+    if (
+      seatsInsertError
+    ) {
       await supabase
-        .from("bookings")
+        .from(
+          "bookings"
+        )
         .delete()
         .eq(
           "id",
@@ -484,6 +683,7 @@ export async function POST(request: Request) {
         {
           message:
             "Failed to reserve the selected seat.",
+
           error:
             seatsInsertError.message,
         },
@@ -495,7 +695,143 @@ export async function POST(request: Request) {
 
     /*
      * -------------------------------------------------
-     * 12. SUCCESS
+     * 12. DETERMINE INITIAL PAYMENT STATE
+     * -------------------------------------------------
+     *
+     * Cash:
+     *   Booking exists, but payment is still due
+     *   when the passenger boards.
+     *
+     * Card:
+     *   Payment will later be completed through
+     *   the sandbox payment gateway.
+     *
+     * Fawry:
+     *   Payment remains pending until the Fawry
+     *   payment flow is completed.
+     */
+
+    const paymentStatus =
+      paymentMethod ===
+      "cash"
+        ? "unpaid"
+        : "pending"
+
+    const paymentProvider =
+      paymentMethod ===
+      "card"
+        ? "paymob"
+        : paymentMethod ===
+            "fawry"
+          ? "fawry"
+          : null
+
+    /*
+     * -------------------------------------------------
+     * 13. CREATE PAYMENT RECORD
+     * -------------------------------------------------
+     */
+
+    const {
+      data:
+        payment,
+      error:
+        paymentError,
+    } =
+      await supabase
+        .from(
+          "payments"
+        )
+        .insert({
+          booking_id:
+            booking.id,
+
+          payment_method:
+            paymentMethod,
+
+          payment_status:
+            paymentStatus,
+
+          amount:
+            totalPrice,
+
+          provider:
+            paymentProvider,
+
+          /*
+           * We do NOT invent a gateway reference here.
+           *
+           * Card/Fawry references will be stored later
+           * when their actual sandbox payment flow
+           * starts.
+           */
+          provider_reference:
+            null,
+
+          paid_at:
+            null,
+        })
+        .select(
+          "*"
+        )
+        .single()
+
+    /*
+     * -------------------------------------------------
+     * 14. ROLLBACK IF PAYMENT RECORD CREATION FAILS
+     * -------------------------------------------------
+     *
+     * We do not want:
+     *
+     * booking exists
+     * seat is reserved
+     * payment record missing
+     *
+     * So if payment creation fails we remove the
+     * booking seats and the booking.
+     */
+
+    if (
+      paymentError ||
+      !payment
+    ) {
+      await supabase
+        .from(
+          "booking_seats"
+        )
+        .delete()
+        .eq(
+          "booking_id",
+          booking.id
+        )
+
+      await supabase
+        .from(
+          "bookings"
+        )
+        .delete()
+        .eq(
+          "id",
+          booking.id
+        )
+
+      return NextResponse.json(
+        {
+          message:
+            "Failed to create the payment record.",
+
+          error:
+            paymentError?.message,
+        },
+        {
+          status: 500,
+        }
+      )
+    }
+
+    /*
+     * -------------------------------------------------
+     * 15. SUCCESS
      * -------------------------------------------------
      */
 
@@ -507,13 +843,18 @@ export async function POST(request: Request) {
         booking,
 
         seats:
-          createdSeats ?? [],
+          createdSeats ??
+          [],
+
+        payment,
       },
       {
         status: 201,
       }
     )
-  } catch (error) {
+  } catch (
+    error
+  ) {
     return NextResponse.json(
       {
         message:

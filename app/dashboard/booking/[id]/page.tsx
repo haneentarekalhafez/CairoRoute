@@ -20,13 +20,21 @@ import {
   CalendarDays,
   Check,
   Clock3,
+  CreditCard,
   MapPin,
+  Banknote,
+  Store,
   Route,
   ShieldCheck,
   UserRound,
 } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
+
+import {
+  useAppPreferences,
+  type LanguagePreference,
+} from "@/components/app-preferences-provider"
 
 import { Button } from "@/components/ui/button"
 
@@ -41,57 +49,121 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+/*
+ * =========================================
+ * TYPES
+ * =========================================
+ */
+
+type PaymentMethod =
+  | "card"
+  | "fawry"
+  | "cash"
+
 type Trip = {
   id: number
 
   departureTime: string
-  arrivalTime: string | null
+
+  arrivalTime:
+    | string
+    | null
 
   price: number
+
   status: string
 
   route: {
-    id: number | null
+    id:
+      | number
+      | null
 
-    estimatedDurationMinutes: number | null
+    estimatedDurationMinutes:
+      | number
+      | null
 
     pickupPoint: {
-      id: number | null
+      id:
+        | number
+        | null
+
       name: string
-      area: string | null
-      latitude: number | null
-      longitude: number | null
+
+      area:
+        | string
+        | null
+
+      latitude:
+        | number
+        | null
+
+      longitude:
+        | number
+        | null
     }
 
     destination: {
-      id: number | null
+      id:
+        | number
+        | null
+
       name: string
-      latitude: number | null
-      longitude: number | null
+
+      latitude:
+        | number
+        | null
+
+      longitude:
+        | number
+        | null
     }
 
     stops: {
       id: number
       order: number
       name: string
-      area: string | null
-      latitude: number | null
-      longitude: number | null
-      type: "origin" | "intermediate" | "destination"
+      area:
+        | string
+        | null
+      latitude:
+        | number
+        | null
+      longitude:
+        | number
+        | null
+      type:
+        | "origin"
+        | "intermediate"
+        | "destination"
     }[]
   }
 
   bus: {
-    id: number | null
+    id:
+      | number
+      | null
+
     name: string
-    brand: string | null
-    model: string | null
+
+    brand:
+      | string
+      | null
+
+    model:
+      | string
+      | null
+
     plateNumber: string
-    color: string | null
+
+    color:
+      | string
+      | null
+
     capacity: number
   }
 
   occupiedSeats: number[]
+
   availableSeats: number
 }
 
@@ -108,6 +180,17 @@ type BookingResponse = {
 
   unavailableSeats?: number[]
 
+  payment?: {
+    id: number
+    booking_id: number
+    payment_method: PaymentMethod
+    payment_status: string
+    amount: number
+    provider: string | null
+    provider_reference: string | null
+    paid_at: string | null
+  }
+
   booking?: {
     id: number
     user_id: string
@@ -116,14 +199,1009 @@ type BookingResponse = {
     status: string
     passenger_name: string
     passenger_phone: string
-    passenger_email: string | null
+    passenger_email:
+      | string
+      | null
     total_price: number
   }
 }
 
+/*
+ * =========================================
+ * PAGE TRANSLATIONS
+ * =========================================
+ */
+
+const bookingCopy = {
+  english: {
+    currentLocation:
+      "Your current location",
+
+    failedLoadTrip:
+      "Failed to load trip.",
+
+    tripDataMissing:
+      "Trip data was not returned.",
+
+    tripUnavailable:
+      "The trip information is unavailable.",
+
+    selectSeatMessage:
+      "Select an available seat.",
+
+    enterNameMessage:
+      "Enter your full name.",
+
+    enterPhoneMessage:
+      "Enter your phone number.",
+
+    reviewMessage:
+      "Confirm that you reviewed the booking.",
+
+    loginMissing:
+      "Your login session could not be found. Please log in again.",
+
+    failedBooking:
+      "Failed to create booking.",
+
+    tripNotFound:
+      "Trip not found",
+
+    noTripId:
+      "No trip ID was provided.",
+
+    loadingBooking:
+      "Loading booking details...",
+
+    tripCouldNotLoad:
+      "The selected trip could not be loaded.",
+
+    backTrip:
+      "Back to trip details",
+
+    completeBooking:
+      "Complete your booking",
+
+    completeDescription:
+      "Select your seat and enter your passenger information.",
+
+    selectSeat:
+      "Select your seat",
+
+    seatDescription:
+      "Reserved seats cannot be selected.",
+
+    frontBus:
+      "Front of bus",
+
+    available:
+      "Available",
+
+    selected:
+      "Selected",
+
+    reserved:
+      "Reserved",
+
+    passengerInformation:
+      "Passenger information",
+
+    passengerDescription:
+      "Enter the passenger details for this reservation.",
+
+    fullName:
+      "Full name",
+
+    fullNamePlaceholder:
+      "Enter your full name",
+
+    phoneNumber:
+      "Phone number",
+
+    emailAddress:
+      "Email address",
+
+    reviewedBooking:
+      "I reviewed the trip and selected-seat details.",
+
+    bookingSummary:
+      "Booking summary",
+
+    pickupPoint:
+      "Pickup point",
+
+    destination:
+      "Destination",
+
+    date:
+      "Date",
+
+    departure:
+      "Departure",
+
+    vehicle:
+      "Vehicle",
+
+    selectedSeat:
+      "Selected seat",
+
+    notSelected:
+      "Not selected",
+
+    seat:
+      "Seat",
+
+    totalPrice:
+      "Total price",
+
+    currency:
+      "EGP",
+
+    paymentRequiredMessage:
+      "Choose a payment method before continuing.",
+
+    paymentMethod:
+      "Payment method",
+
+    paymentDescription:
+      "Choose how you would like to pay for this trip.",
+
+    cardPayment:
+      "Visa / Mastercard",
+
+    cardPaymentDescription:
+      "Pay securely online by card.",
+
+    fawryPayment:
+      "Fawry",
+
+    fawryPaymentDescription:
+      "Pay using a Fawry payment reference.",
+
+    cashPayment:
+      "Cash on boarding",
+
+    cashPaymentDescription:
+      "Pay the trip fare in cash when you board the bus.",
+
+    selectedPaymentMethod:
+      "Payment",
+
+    confirmBooking:
+      "Confirm your booking",
+
+    confirmDescription:
+      "Review your trip and passenger information before confirming.",
+
+    confirming:
+      "Confirming booking...",
+
+    confirmButton:
+      "Confirm booking",
+
+    continuePayment:
+      "Continue to payment",
+
+    creatingBooking:
+      "Creating booking...",
+  },
+
+  arabic: {
+    currentLocation:
+      "موقعك الحالي",
+
+    failedLoadTrip:
+      "تعذر تحميل الرحلة.",
+
+    tripDataMissing:
+      "لم يتم إرجاع بيانات الرحلة.",
+
+    tripUnavailable:
+      "معلومات الرحلة غير متاحة.",
+
+    selectSeatMessage:
+      "اختر مقعدًا متاحًا.",
+
+    enterNameMessage:
+      "أدخل الاسم الكامل.",
+
+    enterPhoneMessage:
+      "أدخل رقم الهاتف.",
+
+    reviewMessage:
+      "أكد أنك راجعت تفاصيل الحجز.",
+
+    loginMissing:
+      "تعذر العثور على جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.",
+
+    failedBooking:
+      "تعذر إنشاء الحجز.",
+
+    tripNotFound:
+      "لم يتم العثور على الرحلة",
+
+    noTripId:
+      "لم يتم تحديد رقم الرحلة.",
+
+    loadingBooking:
+      "جارٍ تحميل تفاصيل الحجز...",
+
+    tripCouldNotLoad:
+      "تعذر تحميل الرحلة المحددة.",
+
+    backTrip:
+      "العودة إلى تفاصيل الرحلة",
+
+    completeBooking:
+      "أكمل حجزك",
+
+    completeDescription:
+      "اختر مقعدك وأدخل بيانات الراكب.",
+
+    selectSeat:
+      "اختر مقعدك",
+
+    seatDescription:
+      "لا يمكن اختيار المقاعد المحجوزة.",
+
+    frontBus:
+      "مقدمة الحافلة",
+
+    available:
+      "متاح",
+
+    selected:
+      "محدد",
+
+    reserved:
+      "محجوز",
+
+    passengerInformation:
+      "بيانات الراكب",
+
+    passengerDescription:
+      "أدخل بيانات الراكب لهذا الحجز.",
+
+    fullName:
+      "الاسم الكامل",
+
+    fullNamePlaceholder:
+      "أدخل الاسم الكامل",
+
+    phoneNumber:
+      "رقم الهاتف",
+
+    emailAddress:
+      "البريد الإلكتروني",
+
+    reviewedBooking:
+      "راجعت تفاصيل الرحلة والمقعد المحدد.",
+
+    bookingSummary:
+      "ملخص الحجز",
+
+    pickupPoint:
+      "نقطة الركوب",
+
+    destination:
+      "الوجهة",
+
+    date:
+      "التاريخ",
+
+    departure:
+      "المغادرة",
+
+    vehicle:
+      "المركبة",
+
+    selectedSeat:
+      "المقعد المحدد",
+
+    notSelected:
+      "لم يتم الاختيار",
+
+    seat:
+      "مقعد",
+
+    totalPrice:
+      "السعر الإجمالي",
+
+    currency:
+      "ج.م",
+
+    paymentRequiredMessage:
+      "اختر طريقة الدفع قبل المتابعة.",
+
+    paymentMethod:
+      "طريقة الدفع",
+
+    paymentDescription:
+      "اختر الطريقة التي تريد استخدامها لدفع قيمة الرحلة.",
+
+    cardPayment:
+      "فيزا / ماستركارد",
+
+    cardPaymentDescription:
+      "ادفع بأمان عبر الإنترنت باستخدام البطاقة.",
+
+    fawryPayment:
+      "فوري",
+
+    fawryPaymentDescription:
+      "ادفع باستخدام رقم مرجعي من فوري.",
+
+    cashPayment:
+      "الدفع نقدًا عند الصعود",
+
+    cashPaymentDescription:
+      "ادفع قيمة الرحلة نقدًا عند صعود الحافلة.",
+
+    selectedPaymentMethod:
+      "الدفع",
+
+    confirmBooking:
+      "تأكيد الحجز",
+
+    confirmDescription:
+      "راجع الرحلة وبيانات الراكب قبل تأكيد الحجز.",
+
+    confirming:
+      "جارٍ تأكيد الحجز...",
+
+    confirmButton:
+      "تأكيد الحجز",
+
+    continuePayment:
+      "المتابعة إلى الدفع",
+
+    creatingBooking:
+      "جارٍ إنشاء الحجز...",
+  },
+
+  french: {
+    currentLocation:
+      "Votre position actuelle",
+
+    failedLoadTrip:
+      "Impossible de charger le trajet.",
+
+    tripDataMissing:
+      "Les données du trajet n’ont pas été retournées.",
+
+    tripUnavailable:
+      "Les informations du trajet sont indisponibles.",
+
+    selectSeatMessage:
+      "Sélectionnez une place disponible.",
+
+    enterNameMessage:
+      "Entrez votre nom complet.",
+
+    enterPhoneMessage:
+      "Entrez votre numéro de téléphone.",
+
+    reviewMessage:
+      "Confirmez que vous avez vérifié la réservation.",
+
+    loginMissing:
+      "Votre session de connexion est introuvable. Veuillez vous reconnecter.",
+
+    failedBooking:
+      "Impossible de créer la réservation.",
+
+    tripNotFound:
+      "Trajet introuvable",
+
+    noTripId:
+      "Aucun identifiant de trajet n’a été fourni.",
+
+    loadingBooking:
+      "Chargement des détails de la réservation...",
+
+    tripCouldNotLoad:
+      "Le trajet sélectionné n’a pas pu être chargé.",
+
+    backTrip:
+      "Retour aux détails du trajet",
+
+    completeBooking:
+      "Finalisez votre réservation",
+
+    completeDescription:
+      "Sélectionnez votre place et renseignez les informations du passager.",
+
+    selectSeat:
+      "Sélectionnez votre place",
+
+    seatDescription:
+      "Les places réservées ne peuvent pas être sélectionnées.",
+
+    frontBus:
+      "Avant du bus",
+
+    available:
+      "Disponible",
+
+    selected:
+      "Sélectionnée",
+
+    reserved:
+      "Réservée",
+
+    passengerInformation:
+      "Informations du passager",
+
+    passengerDescription:
+      "Entrez les informations du passager pour cette réservation.",
+
+    fullName:
+      "Nom complet",
+
+    fullNamePlaceholder:
+      "Entrez votre nom complet",
+
+    phoneNumber:
+      "Numéro de téléphone",
+
+    emailAddress:
+      "Adresse e-mail",
+
+    reviewedBooking:
+      "J’ai vérifié le trajet et les détails de la place sélectionnée.",
+
+    bookingSummary:
+      "Résumé de la réservation",
+
+    pickupPoint:
+      "Point de prise en charge",
+
+    destination:
+      "Destination",
+
+    date:
+      "Date",
+
+    departure:
+      "Départ",
+
+    vehicle:
+      "Véhicule",
+
+    selectedSeat:
+      "Place sélectionnée",
+
+    notSelected:
+      "Non sélectionnée",
+
+    seat:
+      "Place",
+
+    totalPrice:
+      "Prix total",
+
+    currency:
+      "EGP",
+
+    paymentRequiredMessage:
+      "Choisissez un mode de paiement avant de continuer.",
+
+    paymentMethod:
+      "Mode de paiement",
+
+    paymentDescription:
+      "Choisissez comment vous souhaitez payer ce trajet.",
+
+    cardPayment:
+      "Visa / Mastercard",
+
+    cardPaymentDescription:
+      "Payez en ligne de manière sécurisée par carte.",
+
+    fawryPayment:
+      "Fawry",
+
+    fawryPaymentDescription:
+      "Payez à l’aide d’une référence de paiement Fawry.",
+
+    cashPayment:
+      "Paiement en espèces à l’embarquement",
+
+    cashPaymentDescription:
+      "Payez le prix du trajet en espèces lorsque vous montez dans le bus.",
+
+    selectedPaymentMethod:
+      "Paiement",
+
+    confirmBooking:
+      "Confirmez votre réservation",
+
+    confirmDescription:
+      "Vérifiez votre trajet et les informations du passager avant de confirmer.",
+
+    confirming:
+      "Confirmation de la réservation...",
+
+    confirmButton:
+      "Confirmer la réservation",
+
+    continuePayment:
+      "Continuer vers le paiement",
+
+    creatingBooking:
+      "Création de la réservation...",
+  },
+} as const
+
+/*
+ * =========================================
+ * DATABASE LOCATION TRANSLATIONS
+ * =========================================
+ */
+
+const locationTranslations: Record<
+  string,
+  {
+    arabic: string
+    french: string
+  }
+> = {
+  "new cairo": {
+    arabic:
+      "القاهرة الجديدة",
+    french:
+      "Nouveau Caire",
+  },
+
+  "fifth settlement": {
+    arabic:
+      "التجمع الخامس",
+    french:
+      "Cinquième arrondissement",
+  },
+
+  "5th settlement": {
+    arabic:
+      "التجمع الخامس",
+    french:
+      "Cinquième arrondissement",
+  },
+
+  "first settlement": {
+    arabic:
+      "التجمع الأول",
+    french:
+      "Premier arrondissement",
+  },
+
+  "third settlement": {
+    arabic:
+      "التجمع الثالث",
+    french:
+      "Troisième arrondissement",
+  },
+
+  rehab: {
+    arabic:
+      "الرحاب",
+    french:
+      "Al Rehab",
+  },
+
+  "el rehab": {
+    arabic:
+      "الرحاب",
+    french:
+      "Al Rehab",
+  },
+
+  madinaty: {
+    arabic:
+      "مدينتي",
+    french:
+      "Madinaty",
+  },
+
+  shorouk: {
+    arabic:
+      "الشروق",
+    french:
+      "El Shorouk",
+  },
+
+  "el shorouk": {
+    arabic:
+      "الشروق",
+    french:
+      "El Shorouk",
+  },
+
+  maadi: {
+    arabic:
+      "المعادي",
+    french:
+      "Maadi",
+  },
+
+  "el maadi": {
+    arabic:
+      "المعادي",
+    french:
+      "Maadi",
+  },
+
+  "nasr city": {
+    arabic:
+      "مدينة نصر",
+    french:
+      "Nasr City",
+  },
+
+  "madinet nasr": {
+    arabic:
+      "مدينة نصر",
+    french:
+      "Nasr City",
+  },
+
+  heliopolis: {
+    arabic:
+      "مصر الجديدة",
+    french:
+      "Héliopolis",
+  },
+
+  "masr el gedida": {
+    arabic:
+      "مصر الجديدة",
+    french:
+      "Héliopolis",
+  },
+
+  "misr el gedida": {
+    arabic:
+      "مصر الجديدة",
+    french:
+      "Héliopolis",
+  },
+
+  "6th of october": {
+    arabic:
+      "6 أكتوبر",
+    french:
+      "6 Octobre",
+  },
+
+  "6 october": {
+    arabic:
+      "6 أكتوبر",
+    french:
+      "6 Octobre",
+  },
+
+  october: {
+    arabic:
+      "أكتوبر",
+    french:
+      "Octobre",
+  },
+
+  "sheikh zayed": {
+    arabic:
+      "الشيخ زايد",
+    french:
+      "Cheikh Zayed",
+  },
+
+  downtown: {
+    arabic:
+      "وسط البلد",
+    french:
+      "Centre-ville",
+  },
+
+  "downtown cairo": {
+    arabic:
+      "وسط القاهرة",
+    french:
+      "Centre-ville du Caire",
+  },
+
+  "new capital": {
+    arabic:
+      "العاصمة الإدارية الجديدة",
+    french:
+      "Nouvelle capitale administrative",
+  },
+
+  "new administrative capital": {
+    arabic:
+      "العاصمة الإدارية الجديدة",
+    french:
+      "Nouvelle capitale administrative",
+  },
+
+  "abbas el akkad": {
+    arabic:
+      "عباس العقاد",
+    french:
+      "Abbas El Akkad",
+  },
+
+  "makram ebeid": {
+    arabic:
+      "مكرم عبيد",
+    french:
+      "Makram Ebeid",
+  },
+
+  "90th street": {
+    arabic:
+      "شارع التسعين",
+    french:
+      "Rue 90",
+  },
+
+  "north 90th street": {
+    arabic:
+      "شارع التسعين الشمالي",
+    french:
+      "Rue 90 Nord",
+  },
+
+  "south 90th street": {
+    arabic:
+      "شارع التسعين الجنوبي",
+    french:
+      "Rue 90 Sud",
+  },
+
+  "cairo festival city": {
+    arabic:
+      "كايرو فيستيفال سيتي",
+    french:
+      "Cairo Festival City",
+  },
+
+  "point 90": {
+    arabic:
+      "بوينت 90",
+    french:
+      "Point 90",
+  },
+
+  auc: {
+    arabic:
+      "الجامعة الأمريكية بالقاهرة",
+    french:
+      "Université américaine du Caire",
+  },
+
+  "american university in cairo": {
+    arabic:
+      "الجامعة الأمريكية بالقاهرة",
+    french:
+      "Université américaine du Caire",
+  },
+
+  ramses: {
+    arabic:
+      "رمسيس",
+    french:
+      "Ramsès",
+  },
+
+  tahrir: {
+    arabic:
+      "التحرير",
+    french:
+      "Tahrir",
+  },
+
+  zamalek: {
+    arabic:
+      "الزمالك",
+    french:
+      "Zamalek",
+  },
+
+  dokki: {
+    arabic:
+      "الدقي",
+    french:
+      "Dokki",
+  },
+
+  mohandessin: {
+    arabic:
+      "المهندسين",
+    french:
+      "Mohandessin",
+  },
+
+  giza: {
+    arabic:
+      "الجيزة",
+    french:
+      "Gizeh",
+  },
+
+  katameya: {
+    arabic:
+      "القطامية",
+    french:
+      "Katameya",
+  },
+
+  mokattam: {
+    arabic:
+      "المقطم",
+    french:
+      "Mokattam",
+  },
+
+  "ain shams": {
+    arabic:
+      "عين شمس",
+    french:
+      "Aïn Shams",
+  },
+
+  nozha: {
+    arabic:
+      "النزهة",
+    french:
+      "Nozha",
+  },
+
+  "new nozha": {
+    arabic:
+      "النزهة الجديدة",
+    french:
+      "Nouvelle Nozha",
+  },
+
+  obour: {
+    arabic:
+      "العبور",
+    french:
+      "Obour",
+  },
+
+  "el obour": {
+    arabic:
+      "العبور",
+    french:
+      "Obour",
+  },
+
+  "badr city": {
+    arabic:
+      "مدينة بدر",
+    french:
+      "Ville de Badr",
+  },
+
+  "future city": {
+    arabic:
+      "مستقبل سيتي",
+    french:
+      "Mostakbal City",
+  },
+
+  "mostakbal city": {
+    arabic:
+      "مستقبل سيتي",
+    french:
+      "Mostakbal City",
+  },
+}
+
+/*
+ * =========================================
+ * LOCATION TRANSLATION
+ * =========================================
+ */
+
+function translateLocationText(
+  value:
+    | string
+    | null
+    | undefined,
+
+  language:
+    LanguagePreference
+) {
+  if (!value) {
+    return ""
+  }
+
+  if (
+    language ===
+    "english"
+  ) {
+    return value
+  }
+
+  const normalized =
+    value
+      .trim()
+      .toLowerCase()
+
+  const directMatch =
+    locationTranslations[
+      normalized
+    ]
+
+  if (
+    directMatch
+  ) {
+    return directMatch[
+      language
+    ]
+  }
+
+  let translated =
+    value
+
+  const entries =
+    Object.entries(
+      locationTranslations
+    ).sort(
+      (
+        [first],
+        [second]
+      ) =>
+        second.length -
+        first.length
+    )
+
+  for (
+    const [
+      english,
+      translation,
+    ] of entries
+  ) {
+    const expression =
+      new RegExp(
+        escapeRegExp(
+          english
+        ),
+        "gi"
+      )
+
+    translated =
+      translated.replace(
+        expression,
+        translation[
+          language
+        ]
+      )
+  }
+
+  return translated
+}
+
+function escapeRegExp(
+  value: string
+) {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  )
+}
+
+/*
+ * =========================================
+ * PAGE
+ * =========================================
+ */
+
 export default function BookingPage() {
   const params =
-    useParams<{ id: string }>()
+    useParams<{
+      id: string
+    }>()
 
   const router =
     useRouter()
@@ -131,61 +1209,95 @@ export default function BookingPage() {
   const searchParams =
     useSearchParams()
 
+  const {
+    language,
+  } =
+    useAppPreferences()
+
+  const copy =
+    bookingCopy[
+      language
+    ]
+
   const tripId =
     params.id
 
   const currentLocation =
-    searchParams.get("from") ||
-    "Your current location"
+    searchParams.get(
+      "from"
+    ) ||
+    copy.currentLocation
 
   const destinationId =
     searchParams.get(
       "destinationId"
     ) || ""
 
-  const [trip, setTrip] =
-    useState<Trip | null>(null)
+  const [
+    trip,
+    setTrip,
+  ] =
+    useState<Trip | null>(
+      null
+    )
 
   const [
     selectedSeat,
     setSelectedSeat,
   ] =
-    useState<number | null>(null)
+    useState<number | null>(
+      null
+    )
 
   const [
     fullName,
     setFullName,
-  ] = useState("")
+  ] =
+    useState("")
 
   const [
     phoneNumber,
     setPhoneNumber,
-  ] = useState("")
+  ] =
+    useState("")
 
   const [
     email,
     setEmail,
-  ] = useState("")
+  ] =
+    useState("")
+
+  const [
+    paymentMethod,
+    setPaymentMethod,
+  ] =
+    useState<PaymentMethod | null>(
+      null
+    )
 
   const [
     acceptedTerms,
     setAcceptedTerms,
-  ] = useState(false)
+  ] =
+    useState(false)
 
   const [
     loading,
     setLoading,
-  ] = useState(true)
+  ] =
+    useState(true)
 
   const [
     submitting,
     setSubmitting,
-  ] = useState(false)
+  ] =
+    useState(false)
 
   const [
     message,
     setMessage,
-  ] = useState("")
+  ] =
+    useState("")
 
   /*
    * ---------------------------------------
@@ -194,7 +1306,9 @@ export default function BookingPage() {
    */
 
   useEffect(() => {
-    if (!tripId) {
+    if (
+      !tripId
+    ) {
       return
     }
 
@@ -206,42 +1320,57 @@ export default function BookingPage() {
               tripId
             )}`,
             {
-              cache: "no-store",
+              cache:
+                "no-store",
             }
           )
 
         const result =
           (await response.json()) as TripResponse
 
-        if (!response.ok) {
+        if (
+          !response.ok
+        ) {
           throw new Error(
             result.error
               ? `${result.message} ${result.error}`
               : result.message ||
-                  "Failed to load trip."
+                  copy.failedLoadTrip
           )
         }
 
-        if (!result.trip) {
+        if (
+          !result.trip
+        ) {
           throw new Error(
-            "Trip data was not returned."
+            copy.tripDataMissing
           )
         }
 
-        setTrip(result.trip)
-      } catch (error) {
+        setTrip(
+          result.trip
+        )
+      } catch (
+        error
+      ) {
         setMessage(
           error instanceof Error
             ? error.message
-            : "Failed to load trip."
+            : copy.failedLoadTrip
         )
       } finally {
-        setLoading(false)
+        setLoading(
+          false
+        )
       }
     }
 
     loadTrip()
-  }, [tripId])
+  }, [
+    tripId,
+    copy.failedLoadTrip,
+    copy.tripDataMissing,
+  ])
 
   /*
    * ---------------------------------------
@@ -250,14 +1379,23 @@ export default function BookingPage() {
    */
 
   const unavailableSeats =
-    useMemo(() => {
-      return new Set(
-        trip?.occupiedSeats?.map(
-          (seatNumber) =>
-            Number(seatNumber)
-        ) ?? []
-      )
-    }, [trip])
+    useMemo(
+      () => {
+        return new Set(
+          trip?.occupiedSeats?.map(
+            (
+              seatNumber
+            ) =>
+              Number(
+                seatNumber
+              )
+          ) ?? []
+        )
+      },
+      [
+        trip,
+      ]
+    )
 
   /*
    * ---------------------------------------
@@ -266,80 +1404,119 @@ export default function BookingPage() {
    */
 
   const seatNumbers =
-    useMemo(() => {
-      if (!trip) {
-        return []
-      }
+    useMemo(
+      () => {
+        if (
+          !trip
+        ) {
+          return []
+        }
 
-      return Array.from(
-        {
-          length: Number(
-            trip.bus.capacity
-          ),
-        },
-        (_, index) =>
-          index + 1
-      )
-    }, [trip])
+        return Array.from(
+          {
+            length:
+              Number(
+                trip.bus
+                  .capacity
+              ),
+          },
+          (
+            _,
+            index
+          ) =>
+            index +
+            1
+        )
+      },
+      [
+        trip,
+      ]
+    )
 
   /*
    * ---------------------------------------
-   * CREATE THE BOOKING
+   * CREATE BOOKING
    * ---------------------------------------
    */
 
   async function confirmBooking(
-    event: React.FormEvent<HTMLFormElement>
+    event:
+      React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault()
 
-    if (!trip) {
+    if (
+      !trip
+    ) {
       setMessage(
-        "The trip information is unavailable."
+        copy.tripUnavailable
       )
 
       return
     }
 
-    if (selectedSeat === null) {
+    if (
+      selectedSeat ===
+      null
+    ) {
       setMessage(
-        "Select an available seat."
+        copy.selectSeatMessage
       )
 
       return
     }
 
-    if (!fullName.trim()) {
+    if (
+      !fullName.trim()
+    ) {
       setMessage(
-        "Enter your full name."
+        copy.enterNameMessage
       )
 
       return
     }
 
-    if (!phoneNumber.trim()) {
+    if (
+      !phoneNumber.trim()
+    ) {
       setMessage(
-        "Enter your phone number."
+        copy.enterPhoneMessage
       )
 
       return
     }
 
-    if (!acceptedTerms) {
+    if (
+      !paymentMethod
+    ) {
       setMessage(
-        "Confirm that you reviewed the booking."
+        copy.paymentRequiredMessage
       )
 
       return
     }
 
-    setSubmitting(true)
+    if (
+      !acceptedTerms
+    ) {
+      setMessage(
+        copy.reviewMessage
+      )
+
+      return
+    }
+
+    setSubmitting(
+      true
+    )
+
     setMessage("")
 
     try {
       /*
        * Get the browser's REAL authenticated session.
        */
+
       const supabase =
         createClient()
 
@@ -357,18 +1534,20 @@ export default function BookingPage() {
         !session
       ) {
         throw new Error(
-          "Your login session could not be found. Please log in again."
+          copy.loginMissing
         )
       }
 
       /*
-       * Send the Supabase access token to our API.
+       * Send the Supabase access token.
        */
+
       const response =
         await fetch(
           "/api/bookings",
           {
-            method: "POST",
+            method:
+              "POST",
 
             headers: {
               "Content-Type":
@@ -378,24 +1557,29 @@ export default function BookingPage() {
                 `Bearer ${session.access_token}`,
             },
 
-            body: JSON.stringify({
-              tripId:
-                trip.id,
+            body:
+              JSON.stringify(
+                {
+                  tripId:
+                    trip.id,
 
-              seatNumbers: [
-                selectedSeat,
-              ],
+                  seatNumbers: [
+                    selectedSeat,
+                  ],
 
-              passengerName:
-                fullName.trim(),
+                  passengerName:
+                    fullName.trim(),
 
-              passengerPhone:
-                phoneNumber.trim(),
+                  passengerPhone:
+                    phoneNumber.trim(),
 
-              passengerEmail:
-                email.trim() ||
-                null,
-            }),
+                  passengerEmail:
+                    email.trim() ||
+                    null,
+
+                  paymentMethod,
+                }
+              ),
           }
         )
 
@@ -412,10 +1596,6 @@ export default function BookingPage() {
         !response.ok ||
         !result.booking
       ) {
-        /*
-         * Someone may have booked this seat
-         * after we originally loaded the page.
-         */
         if (
           result.unavailableSeats?.includes(
             selectedSeat
@@ -433,7 +1613,9 @@ export default function BookingPage() {
 
               const seatAlreadyExists =
                 previousTrip.occupiedSeats.some(
-                  (seatNumber) =>
+                  (
+                    seatNumber
+                  ) =>
                     Number(
                       seatNumber
                     ) ===
@@ -473,43 +1655,81 @@ export default function BookingPage() {
           result.error
             ? `${result.message} ${result.error}`
             : result.message ||
-                "Failed to create booking."
+                copy.failedBooking
         )
       }
 
       /*
        * ---------------------------------------
-       * BOOKING SUCCESS
+       * BOOKING CREATED
        * ---------------------------------------
        *
-       * Success page only needs confirmation data.
+       * Cash can go directly to the confirmed
+       * ticket because no online checkout is
+       * required.
+       *
+       * Card and Fawry must go through the
+       * payment page first.
        */
 
-      const successParams =
-        new URLSearchParams({
-          bookingId:
-            result.booking.id.toString(),
+      const paymentStatus =
+        result.payment
+          ?.payment_status ||
+        (paymentMethod === "cash"
+          ? "unpaid"
+          : "pending")
 
-          bookingReference:
-            result.booking
-              .booking_reference,
+      const sharedParams =
+        new URLSearchParams(
+          {
+            bookingReference:
+              result.booking
+                .booking_reference,
 
-          seat:
-            selectedSeat.toString(),
+            seat:
+              selectedSeat.toString(),
 
-          name:
-            result.booking
-              .passenger_name,
-        })
+            name:
+              result.booking
+                .passenger_name,
+
+            paymentMethod,
+
+            paymentStatus,
+
+            amount:
+              result.booking
+                .total_price
+                .toString(),
+          }
+        )
+
+      if (
+        paymentMethod ===
+        "cash"
+      ) {
+        sharedParams.set(
+          "bookingId",
+          result.booking.id.toString()
+        )
+
+        router.push(
+          `/dashboard/booking-success?${sharedParams.toString()}`
+        )
+
+        return
+      }
 
       router.push(
-        `/dashboard/booking-success?${successParams.toString()}`
+        `/dashboard/payment/${result.booking.id}?${sharedParams.toString()}`
       )
-    } catch (error) {
+    } catch (
+      error
+    ) {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Failed to create booking."
+          : copy.failedBooking
       )
     } finally {
       setSubmitting(
@@ -524,63 +1744,98 @@ export default function BookingPage() {
    * ---------------------------------------
    */
 
-  if (!tripId) {
+  if (
+    !tripId
+  ) {
     return (
       <PageMessage
-        title="Trip not found"
-        message="No trip ID was provided."
-      />
-    )
-  }
-
-  if (loading) {
-    return (
-      <PageMessage
-        message="Loading booking details..."
-      />
-    )
-  }
-
-  if (!trip) {
-    return (
-      <PageMessage
-        title="Trip not found"
+        title={
+          copy.tripNotFound
+        }
         message={
-          message ||
-          "The selected trip could not be loaded."
+          copy.noTripId
         }
       />
     )
   }
 
+  if (
+    loading
+  ) {
+    return (
+      <PageMessage
+        message={
+          copy.loadingBooking
+        }
+      />
+    )
+  }
+
+  if (
+    !trip
+  ) {
+    return (
+      <PageMessage
+        title={
+          copy.tripNotFound
+        }
+        message={
+          message ||
+          copy.tripCouldNotLoad
+        }
+      />
+    )
+  }
+
+  /*
+   * ---------------------------------------
+   * TRIP DATA
+   * ---------------------------------------
+   */
+
   const destination =
     trip.route
-      .destination.name
+      .destination
+      .name
 
   const vehicleName =
     [
       trip.bus.brand,
       trip.bus.model,
     ]
-      .filter(Boolean)
-      .join(" ") ||
+      .filter(
+        Boolean
+      )
+      .join(
+        " "
+      ) ||
     trip.bus.name
 
   const backParams =
-    new URLSearchParams({
-      from:
-        currentLocation,
+    new URLSearchParams(
+      {
+        from:
+          currentLocation,
 
-      to:
-        destination,
-    })
+        to:
+          destination,
+      }
+    )
 
-  if (destinationId) {
+  if (
+    destinationId
+  ) {
     backParams.set(
       "destinationId",
       destinationId
     )
   }
+
+  /*
+   * ---------------------------------------
+   * RENDER
+   * ---------------------------------------
+   */
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
@@ -591,15 +1846,21 @@ export default function BookingPage() {
         >
           <ArrowLeft className="size-4" />
 
-          Back to trip details
+          {
+            copy.backTrip
+          }
         </Link>
 
         <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">
-          Complete your booking
+          {
+            copy.completeBooking
+          }
         </h1>
 
         <p className="mt-2 text-slate-600">
-          Select your seat and enter your passenger information.
+          {
+            copy.completeDescription
+          }
         </p>
       </section>
 
@@ -610,14 +1871,20 @@ export default function BookingPage() {
         className="grid gap-6 lg:grid-cols-[1fr_360px]"
       >
         <div className="space-y-6">
+          {/* SEAT SELECTION */}
+
           <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100">
               <CardTitle className="text-xl text-slate-900">
-                Select your seat
+                {
+                  copy.selectSeat
+                }
               </CardTitle>
 
               <CardDescription>
-                Reserved seats cannot be selected.
+                {
+                  copy.seatDescription
+                }
               </CardDescription>
             </CardHeader>
 
@@ -628,7 +1895,9 @@ export default function BookingPage() {
                     <BusFront className="size-5 text-[#512978]" />
 
                     <span className="text-sm font-medium text-slate-800">
-                      Front of bus
+                      {
+                        copy.frontBus
+                      }
                     </span>
                   </div>
 
@@ -679,7 +1948,10 @@ export default function BookingPage() {
                           {selected ? (
                             <Check className="size-4" />
                           ) : (
-                            seatNumber
+                            formatNumber(
+                              seatNumber,
+                              language
+                            )
                           )}
                         </button>
                       )
@@ -690,38 +1962,52 @@ export default function BookingPage() {
                 <div className="mt-6 flex flex-wrap gap-4 text-xs text-slate-600">
                   <LegendItem
                     className="border-slate-300 bg-white"
-                    label="Available"
+                    label={
+                      copy.available
+                    }
                   />
 
                   <LegendItem
                     className="border-[#512978] bg-[#512978]"
-                    label="Selected"
+                    label={
+                      copy.selected
+                    }
                   />
 
                   <LegendItem
                     className="border-slate-200 bg-slate-200"
-                    label="Reserved"
+                    label={
+                      copy.reserved
+                    }
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* PASSENGER INFORMATION */}
+
           <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100">
               <CardTitle className="text-xl text-slate-900">
-                Passenger information
+                {
+                  copy.passengerInformation
+                }
               </CardTitle>
 
               <CardDescription>
-                Enter the passenger details for this reservation.
+                {
+                  copy.passengerDescription
+                }
               </CardDescription>
             </CardHeader>
 
             <CardContent className="grid gap-5 p-6 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="full-name">
-                  Full name
+                  {
+                    copy.fullName
+                  }
                 </Label>
 
                 <Input
@@ -744,13 +2030,17 @@ export default function BookingPage() {
                       ""
                     )
                   }}
-                  placeholder="Enter your full name"
+                  placeholder={
+                    copy.fullNamePlaceholder
+                  }
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="phone">
-                  Phone number
+                  {
+                    copy.phoneNumber
+                  }
                 </Label>
 
                 <Input
@@ -780,7 +2070,9 @@ export default function BookingPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="email">
-                  Email address
+                  {
+                    copy.emailAddress
+                  }
                 </Label>
 
                 <Input
@@ -833,18 +2125,76 @@ export default function BookingPage() {
                 />
 
                 <span className="text-sm leading-6 text-slate-700">
-                  I reviewed the trip and selected-seat details.
+                  {
+                    copy.reviewedBooking
+                  }
                 </span>
               </label>
             </CardContent>
           </Card>
+
+          {/* PAYMENT METHOD */}
+
+          <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
+            <CardHeader className="border-b border-slate-100">
+              <CardTitle className="text-xl text-slate-900">
+                {copy.paymentMethod}
+              </CardTitle>
+
+              <CardDescription>
+                {copy.paymentDescription}
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+              <PaymentMethodButton
+                icon={CreditCard}
+                title={copy.cardPayment}
+                description={copy.cardPaymentDescription}
+                selected={paymentMethod === "card"}
+                disabled={submitting}
+                onClick={() => {
+                  setPaymentMethod("card")
+                  setMessage("")
+                }}
+              />
+
+              <PaymentMethodButton
+                icon={Store}
+                title={copy.fawryPayment}
+                description={copy.fawryPaymentDescription}
+                selected={paymentMethod === "fawry"}
+                disabled={submitting}
+                onClick={() => {
+                  setPaymentMethod("fawry")
+                  setMessage("")
+                }}
+              />
+
+              <PaymentMethodButton
+                icon={Banknote}
+                title={copy.cashPayment}
+                description={copy.cashPaymentDescription}
+                selected={paymentMethod === "cash"}
+                disabled={submitting}
+                onClick={() => {
+                  setPaymentMethod("cash")
+                  setMessage("")
+                }}
+              />
+            </CardContent>
+          </Card>
         </div>
+
+        {/* SUMMARY */}
 
         <aside className="space-y-6">
           <Card className="rounded-xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100">
               <CardTitle className="text-xl text-slate-900">
-                Booking summary
+                {
+                  copy.bookingSummary
+                }
               </CardTitle>
             </CardHeader>
 
@@ -853,11 +2203,16 @@ export default function BookingPage() {
                 icon={
                   MapPin
                 }
-                label="Pickup point"
+                label={
+                  copy.pickupPoint
+                }
                 value={
-                  trip.route
-                    .pickupPoint
-                    .name
+                  translateLocationText(
+                    trip.route
+                      .pickupPoint
+                      .name,
+                    language
+                  )
                 }
               />
 
@@ -865,9 +2220,14 @@ export default function BookingPage() {
                 icon={
                   MapPin
                 }
-                label="Destination"
+                label={
+                  copy.destination
+                }
                 value={
-                  destination
+                  translateLocationText(
+                    destination,
+                    language
+                  )
                 }
               />
 
@@ -875,27 +2235,39 @@ export default function BookingPage() {
                 icon={
                   CalendarDays
                 }
-                label="Date"
-                value={formatDate(
-                  trip.departureTime
-                )}
+                label={
+                  copy.date
+                }
+                value={
+                  formatDate(
+                    trip.departureTime,
+                    language
+                  )
+                }
               />
 
               <SummaryItem
                 icon={
                   Clock3
                 }
-                label="Departure"
-                value={formatTime(
-                  trip.departureTime
-                )}
+                label={
+                  copy.departure
+                }
+                value={
+                  formatTime(
+                    trip.departureTime,
+                    language
+                  )
+                }
               />
 
               <SummaryItem
                 icon={
                   BusFront
                 }
-                label="Vehicle"
+                label={
+                  copy.vehicle
+                }
                 value={
                   vehicleName
                 }
@@ -905,31 +2277,65 @@ export default function BookingPage() {
                 icon={
                   UserRound
                 }
-                label="Selected seat"
+                label={
+                  copy.selectedSeat
+                }
                 value={
                   selectedSeat ===
                   null
-                    ? "Not selected"
-                    : `Seat ${selectedSeat}`
+                    ? copy.notSelected
+                    : `${copy.seat} ${formatNumber(
+                        selectedSeat,
+                        language
+                      )}`
+                }
+              />
+
+              <SummaryItem
+                icon={
+                  paymentMethod === "cash"
+                    ? Banknote
+                    : paymentMethod === "fawry"
+                      ? Store
+                      : CreditCard
+                }
+                label={copy.selectedPaymentMethod}
+                value={
+                  paymentMethod === "card"
+                    ? copy.cardPayment
+                    : paymentMethod === "fawry"
+                      ? copy.fawryPayment
+                      : paymentMethod === "cash"
+                        ? copy.cashPayment
+                        : copy.notSelected
                 }
               />
 
               <div className="border-t border-slate-100 pt-5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-600">
-                    Total price
+                    {
+                      copy.totalPrice
+                    }
                   </span>
 
                   <span className="text-2xl font-semibold text-slate-900">
-                    EGP{" "}
-                    {Number(
-                      trip.price
-                    ).toFixed(0)}
+                    {
+                      copy.currency
+                    }{" "}
+                    {formatNumber(
+                      Number(
+                        trip.price
+                      ),
+                      language
+                    )}
                   </span>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* CONFIRMATION */}
 
           <Card className="rounded-xl border-purple-100 bg-purple-50 shadow-sm">
             <CardContent className="p-6">
@@ -938,11 +2344,15 @@ export default function BookingPage() {
 
                 <div>
                   <p className="font-medium text-slate-900">
-                    Confirm your booking
+                    {
+                      copy.confirmBooking
+                    }
                   </p>
 
                   <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Review your trip and passenger information before confirming.
+                    {
+                      copy.confirmDescription
+                    }
                   </p>
                 </div>
               </div>
@@ -961,8 +2371,10 @@ export default function BookingPage() {
                 className="mt-5 h-11 w-full bg-[#512978] text-white hover:bg-[#40205f]"
               >
                 {submitting
-                  ? "Confirming booking..."
-                  : "Confirm booking"}
+                  ? copy.creatingBooking
+                  : paymentMethod === "cash"
+                    ? copy.confirmButton
+                    : copy.continuePayment}
               </Button>
             </CardContent>
           </Card>
@@ -971,6 +2383,65 @@ export default function BookingPage() {
     </div>
   )
 }
+
+/*
+ * =========================================
+ * PAYMENT METHOD BUTTON
+ * =========================================
+ */
+
+function PaymentMethodButton({
+  icon: Icon,
+  title,
+  description,
+  selected,
+  disabled,
+  onClick,
+}: {
+  icon: React.ElementType
+  title: string
+  description: string
+  selected: boolean
+  disabled: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex min-h-32 flex-col items-start rounded-xl border p-4 text-left transition ${
+        selected
+          ? "border-[#512978] bg-purple-50 ring-1 ring-[#512978]"
+          : "border-slate-200 bg-white hover:border-purple-300 hover:bg-purple-50/50"
+      } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+    >
+      <div
+        className={`flex size-10 items-center justify-center rounded-lg ${
+          selected
+            ? "bg-[#512978] text-white"
+            : "bg-purple-50 text-[#512978]"
+        }`}
+      >
+        <Icon className="size-5" />
+      </div>
+
+      <p className="mt-4 font-semibold text-slate-900">
+        {title}
+      </p>
+
+      <p className="mt-1 text-sm leading-5 text-slate-500">
+        {description}
+      </p>
+    </button>
+  )
+}
+
+/*
+ * =========================================
+ * PAGE MESSAGE
+ * =========================================
+ */
 
 function PageMessage({
   title,
@@ -997,6 +2468,12 @@ function PageMessage({
     </Card>
   )
 }
+
+/*
+ * =========================================
+ * SUMMARY ITEM
+ * =========================================
+ */
 
 function SummaryItem({
   icon: Icon,
@@ -1026,6 +2503,12 @@ function SummaryItem({
   )
 }
 
+/*
+ * =========================================
+ * LEGEND ITEM
+ * =========================================
+ */
+
 function LegendItem({
   className,
   label,
@@ -1046,31 +2529,96 @@ function LegendItem({
   )
 }
 
-function formatDate(
-  value: string
+/*
+ * =========================================
+ * FORMATTING
+ * =========================================
+ */
+
+function getLocale(
+  language:
+    LanguagePreference
 ) {
-  return new Intl.DateTimeFormat(
-    "en-EG",
+  if (
+    language ===
+    "arabic"
+  ) {
+    return "ar-EG"
+  }
+
+  if (
+    language ===
+    "french"
+  ) {
+    return "fr-FR"
+  }
+
+  return "en-EG"
+}
+
+function formatNumber(
+  value: number,
+  language:
+    LanguagePreference
+) {
+  return new Intl.NumberFormat(
+    getLocale(
+      language
+    ),
     {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
+      maximumFractionDigits:
+        0,
     }
   ).format(
-    new Date(value)
+    value
+  )
+}
+
+function formatDate(
+  value: string,
+  language:
+    LanguagePreference
+) {
+  return new Intl.DateTimeFormat(
+    getLocale(
+      language
+    ),
+    {
+      day:
+        "numeric",
+
+      month:
+        "long",
+
+      year:
+        "numeric",
+    }
+  ).format(
+    new Date(
+      value
+    )
   )
 }
 
 function formatTime(
-  value: string
+  value: string,
+  language:
+    LanguagePreference
 ) {
   return new Intl.DateTimeFormat(
-    "en-EG",
+    getLocale(
+      language
+    ),
     {
-      hour: "numeric",
-      minute: "2-digit",
+      hour:
+        "numeric",
+
+      minute:
+        "2-digit",
     }
   ).format(
-    new Date(value)
+    new Date(
+      value
+    )
   )
 }
