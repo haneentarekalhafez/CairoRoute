@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 
 import { createClient } from "@/lib/supabase/server"
 
-type Relation<T> = T | T[] | null
+type Relation<T> =
+  | T
+  | T[]
+  | null
 
 type RawPickupPoint = {
   id: number
@@ -54,7 +57,9 @@ type RawBooking = {
   booking_seats: RawBookingSeat[]
 }
 
-function getOne<T>(value: Relation<T>): T | null {
+function getOne<T>(
+  value: Relation<T>
+): T | null {
   if (!value) {
     return null
   }
@@ -66,14 +71,10 @@ function getOne<T>(value: Relation<T>): T | null {
   return value
 }
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request
+) {
   try {
-    /*
-     * ---------------------------------------
-     * 1. GET AUTH TOKEN
-     * ---------------------------------------
-     */
-
     const authorizationHeader =
       request.headers.get("authorization")
 
@@ -97,23 +98,22 @@ export async function GET(request: Request) {
     const supabase =
       await createClient()
 
-    /*
-     * ---------------------------------------
-     * 2. VERIFY LOGGED-IN USER
-     * ---------------------------------------
-     */
-
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser(accessToken)
+    } =
+      await supabase.auth.getUser(accessToken)
 
-    if (userError || !user) {
+    if (
+      userError ||
+      !user
+    ) {
       return NextResponse.json(
         {
           message:
             "Your login session is invalid or expired.",
-          error: userError?.message,
+          error:
+            userError?.message,
         },
         {
           status: 401,
@@ -122,82 +122,83 @@ export async function GET(request: Request) {
     }
 
     /*
-     * ---------------------------------------
-     * 3. GET ONLY THIS USER'S BOOKINGS
-     * ---------------------------------------
+     * Only confirmed bookings belong in My Bookings.
+     *
+     * Card/Fawry attempts stay hidden while they are
+     * pending_payment or failed.
+     *
+     * Cash bookings still appear because they are
+     * confirmed immediately even though payment is
+     * collected later on boarding.
      */
-
     const {
       data,
       error,
-    } = await supabase
-      .from("bookings")
-      .select(`
-        id,
-        booking_reference,
-        status,
-        total_price,
-        passenger_name,
-        passenger_phone,
-        passenger_email,
-        created_at,
-
-        trip:trips (
+    } =
+      await supabase
+        .from("bookings")
+        .select(`
           id,
-          departure_time,
-          arrival_time,
+          booking_reference,
+          status,
+          total_price,
+          passenger_name,
+          passenger_phone,
+          passenger_email,
+          created_at,
 
-          route:routes (
+          trip:trips (
             id,
+            departure_time,
+            arrival_time,
 
-            pickup_point:pickup_points (
+            route:routes (
               id,
-              name,
-              area
+
+              pickup_point:pickup_points (
+                id,
+                name,
+                area
+              ),
+
+              destination:destinations (
+                id,
+                name
+              )
             ),
 
-            destination:destinations (
+            bus:buses (
               id,
-              name
+              name,
+              brand,
+              model,
+              plate_number
             )
           ),
 
-          bus:buses (
-            id,
-            name,
-            brand,
-            model,
-            plate_number
+          booking_seats (
+            seat_number
           )
-        ),
-
-        booking_seats (
-          seat_number
-        )
-      `)
-      .eq("user_id", user.id)
-      .order("created_at", {
-        ascending: false,
-      })
+        `)
+        .eq("user_id", user.id)
+        .eq("status", "confirmed")
+        .order("created_at", {
+          ascending: false,
+        })
 
     if (error) {
       return NextResponse.json(
         {
           message:
             "Failed to load your bookings.",
-          error: error.message,
+          error:
+            error.message,
         },
         {
           status: 500,
         }
       )
     }
-
-    /*
-     * ---------------------------------------
-     * 4. CLEAN THE RESPONSE FOR FRONTEND
-     * ---------------------------------------
-     */
 
     const rawBookings =
       (data ?? []) as unknown as RawBooking[]
@@ -211,14 +212,10 @@ export async function GET(request: Request) {
           getOne(trip?.route ?? null)
 
         const pickupPoint =
-          getOne(
-            route?.pickup_point ?? null
-          )
+          getOne(route?.pickup_point ?? null)
 
         const destination =
-          getOne(
-            route?.destination ?? null
-          )
+          getOne(route?.destination ?? null)
 
         const bus =
           getOne(trip?.bus ?? null)
@@ -236,13 +233,9 @@ export async function GET(request: Request) {
         const seats =
           (booking.booking_seats ?? [])
             .map((seat) =>
-              Number(
-                seat.seat_number
-              )
+              Number(seat.seat_number)
             )
-            .sort(
-              (a, b) => a - b
-            )
+            .sort((a, b) => a - b)
 
         return {
           id:
@@ -255,9 +248,7 @@ export async function GET(request: Request) {
             booking.status,
 
           totalPrice:
-            Number(
-              booking.total_price
-            ),
+            Number(booking.total_price),
 
           passengerName:
             booking.passenger_name,
@@ -275,20 +266,17 @@ export async function GET(request: Request) {
             trip?.id ?? null,
 
           departureTime:
-            trip?.departure_time ??
-            null,
+            trip?.departure_time ?? null,
 
           arrivalTime:
-            trip?.arrival_time ??
-            null,
+            trip?.arrival_time ?? null,
 
           pickupPoint:
             pickupPoint?.name ??
             "Unknown pickup point",
 
           pickupArea:
-            pickupPoint?.area ??
-            null,
+            pickupPoint?.area ?? null,
 
           destination:
             destination?.name ??
@@ -308,7 +296,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       bookings,
     })
-  } catch (error) {
+  } catch (
+    error
+  ) {
     return NextResponse.json(
       {
         message:

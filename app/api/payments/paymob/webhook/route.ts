@@ -472,9 +472,11 @@ export async function POST(
     let booking:
       | {
           id: number
+          trip_id: number
           booking_reference: string
           status: string
           total_price: number
+          pending_seat_numbers: number[] | null
         }
       | null =
       null
@@ -499,9 +501,11 @@ export async function POST(
           )
           .select(`
             id,
+            trip_id,
             booking_reference,
             status,
-            total_price
+            total_price,
+            pending_seat_numbers
           `)
           .eq(
             "booking_reference",
@@ -592,9 +596,11 @@ export async function POST(
             )
             .select(`
               id,
+              trip_id,
               booking_reference,
               status,
-              total_price
+              total_price,
+              pending_seat_numbers
             `)
             .eq(
               "id",
@@ -793,6 +799,355 @@ export async function POST(
     if (
       transactionSucceeded
     ) {
+      /*
+       * =========================================
+       * 10A. IDEMPOTENT ALREADY-CONFIRMED CHECK
+       * =========================================
+       *
+       * Paymob may retry a webhook. If this booking
+       * is already fully confirmed and paid, return
+       * success instead of creating duplicate seats.
+       */
+
+      if (
+        payment.payment_status ===
+          "paid" &&
+        booking.status ===
+          "confirmed"
+      ) {
+        return NextResponse.json(
+          {
+            message:
+              "Paymob payment was already processed.",
+
+            bookingId:
+              booking.id,
+
+            bookingReference:
+              booking.booking_reference,
+
+            paymentStatus:
+              "paid",
+
+            bookingStatus:
+              "confirmed",
+          },
+          {
+            status: 200,
+          }
+        )
+      }
+
+      /*
+       * =========================================
+       * 10B. GET THE SEATS REQUESTED BEFORE PAYMENT
+       * =========================================
+       */
+
+      const requestedSeats =
+        Array.isArray(
+          booking.pending_seat_numbers
+        )
+          ? [
+              ...new Set(
+                booking.pending_seat_numbers
+                  .map(
+                    (
+                      seat
+                    ) =>
+                      Number(
+                        seat
+                      )
+                  )
+                  .filter(
+                    (
+                      seat
+                    ) =>
+                      Number.isInteger(
+                        seat
+                      ) &&
+                      seat >
+                        0
+                  )
+              ),
+            ]
+          : []
+
+      if (
+        requestedSeats.length ===
+        0
+      ) {
+        return NextResponse.json(
+          {
+            message:
+              "The paid booking has no pending seat information.",
+          },
+          {
+            status: 409,
+          }
+        )
+      }
+
+      /*
+       * =========================================
+       * 10C. RE-CHECK SEAT AVAILABILITY
+       * =========================================
+       *
+       * Online payments do not reserve the seat before
+       * payment. Therefore we MUST check again now.
+       *
+       * A webhook retry may find seats already created
+       * for this same booking; those are safe.
+       */
+
+      const {
+        data:
+          seatRows,
+        error:
+          seatLookupError,
+      } =
+        await supabase
+          .from(
+            "booking_seats"
+          )
+          .select(`
+            id,
+            booking_id,
+            trip_id,
+            seat_number
+          `)
+          .eq(
+            "trip_id",
+            booking.trip_id
+          )
+          .in(
+            "seat_number",
+            requestedSeats
+          )
+
+      if (
+        seatLookupError
+      ) {
+        return NextResponse.json(
+          {
+            message:
+              "Payment succeeded, but CairoRoute could not re-check seat availability.",
+
+            error:
+              seatLookupError.message,
+          },
+          {
+            status: 500,
+          }
+        )
+      }
+
+      const conflictingSeats =
+        (
+          seatRows ??
+          []
+        )
+          .filter(
+            (
+              seatRow
+            ) =>
+              Number(
+                seatRow.booking_id
+              ) !==
+              Number(
+                booking.id
+              )
+          )
+          .map(
+            (
+              seatRow
+            ) =>
+              Number(
+                seatRow.seat_number
+              )
+          )
+
+      if (
+        conflictingSeats.length >
+        0
+      ) {
+        /*
+         * The payment itself succeeded, but another
+         * booking took the seat before checkout ended.
+         *
+         * We record the successful provider payment,
+         * but deliberately DO NOT confirm the booking.
+         * This avoids issuing an invalid ticket.
+         */
+
+        const {
+          error:
+            conflictPaymentUpdateError,
+        } =
+          await supabase
+            .from(
+              "payments"
+            )
+            .update({
+              payment_status:
+                "paid",
+
+              provider:
+                "paymob",
+
+              provider_reference:
+                transactionReference,
+
+              paid_at:
+                now,
+
+              updated_at:
+                now,
+            })
+            .eq(
+              "id",
+              payment.id
+            )
+
+        if (
+          conflictPaymentUpdateError
+        ) {
+          return NextResponse.json(
+            {
+              message:
+                "Payment succeeded, but CairoRoute could not record the payment conflict.",
+
+              error:
+                conflictPaymentUpdateError.message,
+            },
+            {
+              status: 500,
+            }
+          )
+        }
+
+        return NextResponse.json(
+          {
+            message:
+              "Payment succeeded, but one or more selected seats were taken before payment finished.",
+
+            bookingId:
+              booking.id,
+
+            bookingReference:
+              booking.booking_reference,
+
+            paymentStatus:
+              "paid",
+
+            bookingStatus:
+              booking.status,
+
+            unavailableSeats:
+              conflictingSeats,
+          },
+          {
+            status: 409,
+          }
+        )
+      }
+
+      /*
+       * =========================================
+       * 10D. CREATE ANY MISSING BOOKING_SEATS
+       * =========================================
+       */
+
+      const seatsAlreadyOwnedByBooking =
+        new Set(
+          (
+            seatRows ??
+            []
+          )
+            .filter(
+              (
+                seatRow
+              ) =>
+                Number(
+                  seatRow.booking_id
+                ) ===
+                Number(
+                  booking.id
+                )
+            )
+            .map(
+              (
+                seatRow
+              ) =>
+                Number(
+                  seatRow.seat_number
+                )
+            )
+        )
+
+      const missingSeats =
+        requestedSeats.filter(
+          (
+            seat
+          ) =>
+            !seatsAlreadyOwnedByBooking.has(
+              seat
+            )
+        )
+
+      if (
+        missingSeats.length >
+        0
+      ) {
+        const {
+          error:
+            seatInsertError,
+        } =
+          await supabase
+            .from(
+              "booking_seats"
+            )
+            .insert(
+              missingSeats.map(
+                (
+                  seatNumber
+                ) => ({
+                  booking_id:
+                    booking.id,
+
+                  trip_id:
+                    booking.trip_id,
+
+                  seat_number:
+                    seatNumber,
+                })
+              )
+            )
+
+        if (
+          seatInsertError
+        ) {
+          return NextResponse.json(
+            {
+              message:
+                "Payment succeeded, but CairoRoute could not reserve the selected seat.",
+
+              error:
+                seatInsertError.message,
+            },
+            {
+              status: 500,
+            }
+          )
+        }
+      }
+
+      /*
+       * =========================================
+       * 10E. MARK PAYMENT PAID
+       * =========================================
+       */
+
       const {
         error:
           paymentUpdateError,
@@ -839,6 +1194,12 @@ export async function POST(
         )
       }
 
+      /*
+       * =========================================
+       * 10F. CONFIRM BOOKING + CLEAR PENDING SEATS
+       * =========================================
+       */
+
       const {
         error:
           bookingUpdateError,
@@ -850,6 +1211,9 @@ export async function POST(
           .update({
             status:
               "confirmed",
+
+            pending_seat_numbers:
+              null,
           })
           .eq(
             "id",
@@ -862,7 +1226,7 @@ export async function POST(
         return NextResponse.json(
           {
             message:
-              "Payment was marked as paid, but the booking could not be confirmed.",
+              "Payment was marked as paid and the seat was reserved, but the booking could not be confirmed.",
 
             error:
               bookingUpdateError.message,
@@ -876,7 +1240,7 @@ export async function POST(
       return NextResponse.json(
         {
           message:
-            "Paymob payment verified and booking confirmed.",
+            "Paymob payment verified, seat reserved, and booking confirmed.",
 
           bookingId:
             booking.id,
@@ -889,6 +1253,9 @@ export async function POST(
 
           bookingStatus:
             "confirmed",
+
+          seats:
+            requestedSeats,
         },
         {
           status: 200,

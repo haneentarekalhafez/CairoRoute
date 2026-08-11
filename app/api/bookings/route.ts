@@ -579,8 +579,8 @@ export async function POST(
            *   The booking is confirmed immediately.
            *
            * Card / Fawry:
-           *   The seat is reserved, but the booking
-           *   stays pending until payment succeeds.
+           *   The booking stays pending until payment
+           *   succeeds. The seat is NOT reserved yet.
            */
           status:
             paymentMethod ===
@@ -599,6 +599,20 @@ export async function POST(
 
           total_price:
             totalPrice,
+
+          /*
+           * For online payment methods we remember
+           * the requested seats on the pending booking
+           * without occupying booking_seats yet.
+           *
+           * Cash reserves immediately, so there is no
+           * pending-seat list to keep.
+           */
+          pending_seat_numbers:
+            paymentMethod ===
+            "cash"
+              ? null
+              : cleanedSeatNumbers,
         })
         .select(
           "*"
@@ -625,72 +639,100 @@ export async function POST(
 
     /*
      * -------------------------------------------------
-     * 11. CREATE BOOKING SEATS
+     * 11. RESERVE SEATS ONLY WHEN APPROPRIATE
      * -------------------------------------------------
+     *
+     * Cash:
+     *   The booking is confirmed immediately, so the
+     *   selected seat is reserved now.
+     *
+     * Card / Fawry:
+     *   The booking is only a pending payment attempt.
+     *   We deliberately DO NOT create booking_seats yet.
+     *
+     *   This means:
+     *   - a failed/abandoned online payment does not
+     *     permanently occupy a seat
+     *   - the seat will be reserved later by the payment
+     *     confirmation flow after payment succeeds
      */
 
-    const bookingSeatRows =
-      cleanedSeatNumbers.map(
-        (
-          seatNumber
-        ) => ({
-          booking_id:
-            booking.id,
+    let createdSeats:
+      {
+        id: number
+        booking_id: number
+        trip_id: number
+        seat_number: number
+      }[] =
+      []
 
-          trip_id:
-            tripId,
-
-          seat_number:
-            seatNumber,
-        })
-      )
-
-    const {
-      data:
-        createdSeats,
-      error:
-        seatsInsertError,
-    } =
-      await supabase
-        .from(
-          "booking_seats"
-        )
-        .insert(
-          bookingSeatRows
-        )
-        .select(
-          "*"
-        )
-
-    /*
-     * If the seat insert fails,
-     * remove the booking we just created.
-     */
     if (
-      seatsInsertError
+      paymentMethod ===
+      "cash"
     ) {
-      await supabase
-        .from(
-          "bookings"
-        )
-        .delete()
-        .eq(
-          "id",
-          booking.id
+      const bookingSeatRows =
+        cleanedSeatNumbers.map(
+          (
+            seatNumber
+          ) => ({
+            booking_id:
+              booking.id,
+
+            trip_id:
+              tripId,
+
+            seat_number:
+              seatNumber,
+          })
         )
 
-      return NextResponse.json(
-        {
-          message:
-            "Failed to reserve the selected seat.",
+      const {
+        data:
+          insertedSeats,
+        error:
+          seatsInsertError,
+      } =
+        await supabase
+          .from(
+            "booking_seats"
+          )
+          .insert(
+            bookingSeatRows
+          )
+          .select(
+            "*"
+          )
 
-          error:
-            seatsInsertError.message,
-        },
-        {
-          status: 500,
-        }
-      )
+      if (
+        seatsInsertError
+      ) {
+        await supabase
+          .from(
+            "bookings"
+          )
+          .delete()
+          .eq(
+            "id",
+            booking.id
+          )
+
+        return NextResponse.json(
+          {
+            message:
+              "Failed to reserve the selected seat.",
+
+            error:
+              seatsInsertError.message,
+          },
+          {
+            status: 500,
+          }
+        )
+      }
+
+      createdSeats =
+        insertedSeats ??
+        []
     }
 
     /*
@@ -784,11 +826,13 @@ export async function POST(
      * We do not want:
      *
      * booking exists
-     * seat is reserved
      * payment record missing
      *
-     * So if payment creation fails we remove the
-     * booking seats and the booking.
+     * Cash may also already have a booking_seats row.
+     * Card/Fawry will not have one yet.
+     *
+     * So if payment creation fails we remove any
+     * booking seats and then remove the booking.
      */
 
     if (
