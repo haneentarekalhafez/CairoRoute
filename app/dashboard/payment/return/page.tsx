@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -159,7 +160,7 @@ const returnCopy = {
   },
 } as const
 
-export default function PaymentReturnPage() {
+function PaymentReturnContent() {
   const router =
     useRouter()
 
@@ -515,5 +516,27 @@ export default function PaymentReturnPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function PaymentReturnPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10 dark:bg-[#100b16]">
+          <Card className="w-full max-w-md border-slate-200 bg-white shadow-sm dark:border-[#3a214f] dark:bg-[#17111f]">
+            <CardContent className="py-10 text-center">
+              <LoaderCircle className="mx-auto size-12 animate-spin text-[#512978]" />
+
+              <p className="mt-4 text-sm text-slate-600 dark:text-purple-100/70">
+                Verifying your payment...
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <PaymentReturnContent />
+    </Suspense>
   )
 }
