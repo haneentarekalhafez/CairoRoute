@@ -9,6 +9,7 @@ import {
   CalendarDays,
   House,
   LogOut,
+  MessageCircle,
   Settings,
   UserRound,
 } from "lucide-react"
@@ -68,6 +69,11 @@ export default function AppSidebar({
       ),
       href: "/dashboard/bookings",
       icon: CalendarDays,
+    },
+    {
+      label: "Support",
+      href: "/dashboard/support",
+      icon: MessageCircle,
     },
     {
       label: t(
